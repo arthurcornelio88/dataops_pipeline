@@ -116,7 +116,7 @@ Each module is containerized and connected via `docker-compose` (dev), and desig
 
 ### Phase 3 – Production & Automation
 
-* [ ] Build Airflow DAGs in `dataops`
+* [x] Build Airflow DAGs in `dataops`
 * [ ] Periodic ingestion from mock API
 * [ ] Store new data + run predictions via API
 * [ ] Trigger drift detection via `/monitor`
