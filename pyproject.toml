@@ -1,0 +1,16 @@
+[project]
+name = "dataops-pipeline"
+version = "0.1.0"
+description = "Data pipeline for fraud detection with Airflow"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+
+dependencies = [
+  "apache-airflow[google]==2.8.4",
+  "apache-airflow-providers-google==10.16.0",
+  "pandas==2.1.4",
+  "numpy==1.26.0",
+  "google-cloud-storage==2.16.0",
+  "google-cloud-bigquery==3.21.0",
+  "python-dotenv==1.0.1",
+]
