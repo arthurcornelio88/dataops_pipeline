@@ -2,3 +2,5 @@
 .python-version
 constraints-3.11.txt
 fraud_airflow_bq.json
+airflow_home/
+dags/logs/

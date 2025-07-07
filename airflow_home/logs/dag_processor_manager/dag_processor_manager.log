@@ -5127,3 +5127,16 @@ File Path                                                                       
 /home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_daily_monitoring.py                                   1           0  1.01s           2025-07-07T22:23:36
 /home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_retrain_and_select_model.py                           1           0  0.25s           2025-07-07T22:23:23
 ================================================================================
+[2025-07-08T00:24:09.735+0200] {manager.py:879} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                                                                                        PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+---------------------------------------------------------------------------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_daily_fetch_transactions.py                           1           0  0.81s           2025-07-07T22:23:52
+/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_daily_monitoring.py                                   1           0  0.73s           2025-07-07T22:24:07
+/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_daily_prediction.py                                   1           0  0.72s           2025-07-07T22:23:58
+/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_retrain_and_select_model.py                           1           0  0.12s           2025-07-07T22:23:53
+================================================================================
+[2025-07-08T00:24:10.512+0200] {manager.py:738} INFO - Searching for files in /home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags
+[2025-07-08T00:24:10.514+0200] {manager.py:741} INFO - There are 4 files in /home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags

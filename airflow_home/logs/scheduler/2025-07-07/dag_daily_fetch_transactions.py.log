@@ -1874,3 +1874,10 @@
 [2025-07-08T00:23:52.922+0200] {logging_mixin.py:188} INFO - [2025-07-08T00:23:52.922+0200] {dag.py:3047} INFO - Sync 1 DAGs
 [2025-07-08T00:23:52.936+0200] {logging_mixin.py:188} INFO - [2025-07-08T00:23:52.936+0200] {dag.py:3834} INFO - Setting next_dagrun for daily_fetch_transactions to 2025-07-07 00:00:00+00:00, run_after=2025-07-08 00:00:00+00:00
 [2025-07-08T00:23:52.961+0200] {processor.py:183} INFO - Processing /home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_daily_fetch_transactions.py took 0.766 seconds
+[2025-07-08T00:24:23.815+0200] {processor.py:161} INFO - Started process (PID=63506) to work on /home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_daily_fetch_transactions.py
+[2025-07-08T00:24:23.818+0200] {processor.py:830} INFO - Processing file /home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_daily_fetch_transactions.py for tasks to queue
+[2025-07-08T00:24:23.820+0200] {logging_mixin.py:188} INFO - [2025-07-08T00:24:23.819+0200] {dagbag.py:540} INFO - Filling up the DagBag from /home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_daily_fetch_transactions.py
+[2025-07-08T00:24:24.534+0200] {processor.py:840} INFO - DAG(s) 'daily_fetch_transactions' retrieved from /home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_daily_fetch_transactions.py
+[2025-07-08T00:24:24.546+0200] {logging_mixin.py:188} INFO - [2025-07-08T00:24:24.546+0200] {dag.py:3047} INFO - Sync 1 DAGs
+[2025-07-08T00:24:24.560+0200] {logging_mixin.py:188} INFO - [2025-07-08T00:24:24.559+0200] {dag.py:3834} INFO - Setting next_dagrun for daily_fetch_transactions to 2025-07-07 00:00:00+00:00, run_after=2025-07-08 00:00:00+00:00
+[2025-07-08T00:24:24.582+0200] {processor.py:183} INFO - Processing /home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_daily_fetch_transactions.py took 0.772 seconds

@@ -1874,3 +1874,10 @@
 [2025-07-08T00:23:53.209+0200] {logging_mixin.py:188} INFO - [2025-07-08T00:23:53.209+0200] {dag.py:3047} INFO - Sync 1 DAGs
 [2025-07-08T00:23:53.226+0200] {logging_mixin.py:188} INFO - [2025-07-08T00:23:53.225+0200] {dag.py:3834} INFO - Setting next_dagrun for retrain_and_select_model to None, run_after=None
 [2025-07-08T00:23:53.259+0200] {processor.py:183} INFO - Processing /home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_retrain_and_select_model.py took 0.091 seconds
+[2025-07-08T00:24:24.799+0200] {processor.py:161} INFO - Started process (PID=63526) to work on /home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_retrain_and_select_model.py
+[2025-07-08T00:24:24.800+0200] {processor.py:830} INFO - Processing file /home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_retrain_and_select_model.py for tasks to queue
+[2025-07-08T00:24:24.801+0200] {logging_mixin.py:188} INFO - [2025-07-08T00:24:24.801+0200] {dagbag.py:540} INFO - Filling up the DagBag from /home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_retrain_and_select_model.py
+[2025-07-08T00:24:24.817+0200] {processor.py:840} INFO - DAG(s) 'retrain_and_select_model' retrieved from /home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_retrain_and_select_model.py
+[2025-07-08T00:24:24.845+0200] {logging_mixin.py:188} INFO - [2025-07-08T00:24:24.845+0200] {dag.py:3047} INFO - Sync 1 DAGs
+[2025-07-08T00:24:24.855+0200] {logging_mixin.py:188} INFO - [2025-07-08T00:24:24.855+0200] {dag.py:3834} INFO - Setting next_dagrun for retrain_and_select_model to None, run_after=None
+[2025-07-08T00:24:24.883+0200] {processor.py:183} INFO - Processing /home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_retrain_and_select_model.py took 0.089 seconds
