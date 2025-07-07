@@ -50,6 +50,11 @@ export AIRFLOW__CORE__EXECUTOR=SequentialExecutor
 ### ✅ 3. Run Airflow
 
 ```bash
+pkill -f "airflow webserver"
+pkill -f "airflow scheduler"
+pkill -f gunicorn
+rm airflow-webserver.pid
+
 source .env.airflow
 airflow scheduler &
 airflow webserver --port 8080

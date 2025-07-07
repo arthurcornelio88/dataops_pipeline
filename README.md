@@ -9,3 +9,13 @@ uv pip install "apache-airflow==3.0.2" apache-airflow-providers-google==10.1.1
 uv sync
 
 source .venv/bin/activate
+
+---
+
+airflow setup
+
+```bash
+sa
+chmod +x setup_airflow.sh && ./setup_airflow.sh
+```
+

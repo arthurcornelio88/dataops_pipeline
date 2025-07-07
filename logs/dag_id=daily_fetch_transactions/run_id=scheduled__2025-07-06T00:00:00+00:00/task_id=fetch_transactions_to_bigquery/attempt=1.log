@@ -1,0 +1,15 @@
+[2025-07-07T22:21:09.429+0200] {taskinstance.py:1979} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: daily_fetch_transactions.fetch_transactions_to_bigquery scheduled__2025-07-06T00:00:00+00:00 [queued]>
+[2025-07-07T22:21:09.442+0200] {taskinstance.py:1979} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: daily_fetch_transactions.fetch_transactions_to_bigquery scheduled__2025-07-06T00:00:00+00:00 [queued]>
+[2025-07-07T22:21:09.442+0200] {taskinstance.py:2193} INFO - Starting attempt 1 of 2
+[2025-07-07T22:21:09.453+0200] {taskinstance.py:2217} INFO - Executing <Task(PythonOperator): fetch_transactions_to_bigquery> on 2025-07-06 00:00:00+00:00
+[2025-07-07T22:21:09.459+0200] {standard_task_runner.py:60} INFO - Started process 90526 to run task
+[2025-07-07T22:21:09.464+0200] {standard_task_runner.py:87} INFO - Running: ['airflow', 'tasks', 'run', 'daily_fetch_transactions', 'fetch_transactions_to_bigquery', 'scheduled__2025-07-06T00:00:00+00:00', '--job-id', '12', '--raw', '--subdir', 'DAGS_FOLDER/dag_daily_fetch_transactions.py', '--cfg-path', '/tmp/tmp_udtd2oc']
+[2025-07-07T22:21:09.466+0200] {standard_task_runner.py:88} INFO - Job 12: Subtask fetch_transactions_to_bigquery
+[2025-07-07T22:21:09.505+0200] {task_command.py:423} INFO - Running <TaskInstance: daily_fetch_transactions.fetch_transactions_to_bigquery scheduled__2025-07-06T00:00:00+00:00 [running]> on host Datacraft-AC.localdomain
+[2025-07-07T22:21:09.547+0200] {taskinstance.py:2513} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='airflow' AIRFLOW_CTX_DAG_ID='daily_fetch_transactions' AIRFLOW_CTX_TASK_ID='fetch_transactions_to_bigquery' AIRFLOW_CTX_EXECUTION_DATE='2025-07-06T00:00:00+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='scheduled__2025-07-06T00:00:00+00:00'
+[2025-07-07T22:21:16.694+0200] {gbq_connector.py:363} INFO - 500 out of 500 rows loaded.
+[2025-07-07T22:21:16.695+0200] {logging_mixin.py:188} INFO - ✅ 500 transactions ingested into jedha2024.raw_api_data.daily_20250707
+[2025-07-07T22:21:16.695+0200] {python.py:202} INFO - Done. Returned value was: None
+[2025-07-07T22:21:16.869+0200] {taskinstance.py:1149} INFO - Marking task as SUCCESS. dag_id=daily_fetch_transactions, task_id=fetch_transactions_to_bigquery, execution_date=20250706T000000, start_date=20250707T202109, end_date=20250707T202116
+[2025-07-07T22:21:16.913+0200] {local_task_job_runner.py:234} INFO - Task exited with return code 0
+[2025-07-07T22:21:16.919+0200] {taskinstance.py:3312} INFO - 0 downstream tasks scheduled from follow-on schedule check
