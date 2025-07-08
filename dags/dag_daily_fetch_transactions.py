@@ -1,4 +1,3 @@
-# File: dags/dag_daily_fetch_transactions.py
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
@@ -17,6 +16,9 @@ BQ_PROJECT = os.getenv("BQ_PROJECT") or "your_project"
 BQ_DATASET = os.getenv("BQ_DATASET") or "raw_api_data"
 BQ_LOCATION = os.getenv("BQ_LOCATION") or "EU"
 
+# Optional variability level (default = "high")
+FETCH_VARIABILITY = os.getenv("FETCH_VARIABILITY", "medium")  # "low", "medium", "high"
+
 # ========= FETCH + STORE LOGIC ========= #
 def fetch_transactions_to_bq():
     url = ENDPOINTS.get(ENV)
@@ -24,16 +26,20 @@ def fetch_transactions_to_bq():
         raise ValueError(f"❌ No endpoint defined for ENV: {ENV}")
 
     n = 500
-    response = requests.get(f"{url}?n={n}")
+    full_url = f"{url}?n={n}&variability={FETCH_VARIABILITY}"
+    print(f"🌐 Fetching from: {full_url}")
+
+    response = requests.get(full_url)
     if response.status_code != 200:
-        raise Exception(f"Failed to fetch transactions: {response.status_code} - {response.text}")
+        raise Exception(f"❌ Failed to fetch transactions: {response.status_code} - {response.text}")
 
     df = pd.DataFrame(response.json())
     df["ingestion_ts"] = datetime.utcnow().isoformat()
 
     table_id = f"{BQ_PROJECT}.{BQ_DATASET}.daily_{datetime.utcnow().strftime('%Y%m%d')}"
     df.to_gbq(destination_table=table_id, project_id=BQ_PROJECT, if_exists="replace", location=BQ_LOCATION)
-    print(f"✅ {len(df)} transactions ingested into {table_id}")
+
+    print(f"✅ {len(df)} transactions ingested into {table_id} [variability={FETCH_VARIABILITY}]")
 
 # ========= DAG DEFINITION ========= #
 def_args = {

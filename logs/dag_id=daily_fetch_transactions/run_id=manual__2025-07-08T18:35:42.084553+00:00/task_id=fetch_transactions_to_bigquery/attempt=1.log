@@ -1,0 +1,73 @@
+[2025-07-08T20:35:45.708+0200] {taskinstance.py:1979} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: daily_fetch_transactions.fetch_transactions_to_bigquery manual__2025-07-08T18:35:42.084553+00:00 [queued]>
+[2025-07-08T20:35:45.714+0200] {taskinstance.py:1979} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: daily_fetch_transactions.fetch_transactions_to_bigquery manual__2025-07-08T18:35:42.084553+00:00 [queued]>
+[2025-07-08T20:35:45.715+0200] {taskinstance.py:2193} INFO - Starting attempt 1 of 2
+[2025-07-08T20:35:45.727+0200] {taskinstance.py:2217} INFO - Executing <Task(PythonOperator): fetch_transactions_to_bigquery> on 2025-07-08 18:35:42.084553+00:00
+[2025-07-08T20:35:45.740+0200] {standard_task_runner.py:60} INFO - Started process 21418 to run task
+[2025-07-08T20:35:45.746+0200] {standard_task_runner.py:87} INFO - Running: ['airflow', 'tasks', 'run', 'daily_fetch_transactions', 'fetch_transactions_to_bigquery', 'manual__2025-07-08T18:35:42.084553+00:00', '--job-id', '10', '--raw', '--subdir', 'DAGS_FOLDER/dag_daily_fetch_transactions.py', '--cfg-path', '/tmp/tmpx8kxsc3k']
+[2025-07-08T20:35:45.750+0200] {standard_task_runner.py:88} INFO - Job 10: Subtask fetch_transactions_to_bigquery
+[2025-07-08T20:35:45.803+0200] {task_command.py:423} INFO - Running <TaskInstance: daily_fetch_transactions.fetch_transactions_to_bigquery manual__2025-07-08T18:35:42.084553+00:00 [running]> on host Datacraft-AC.localdomain
+[2025-07-08T20:35:45.867+0200] {taskinstance.py:2513} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='airflow' AIRFLOW_CTX_DAG_ID='daily_fetch_transactions' AIRFLOW_CTX_TASK_ID='fetch_transactions_to_bigquery' AIRFLOW_CTX_EXECUTION_DATE='2025-07-08T18:35:42.084553+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='manual__2025-07-08T18:35:42.084553+00:00'
+[2025-07-08T20:35:58.921+0200] {logging_mixin.py:188} INFO - Please visit this URL to authorize this application: https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=262006177488-3425ks60hkk80fssi9vpohv88g6q1iqd.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8081%2F&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fbigquery&state=vJiVQmose9QsmFWjedbFG82qwTvLBg&prompt=consent&access_type=offline
+[2025-07-08T20:36:20.463+0200] {flow.py:476} INFO - "GET / HTTP/1.1" 200 65
+[2025-07-08T20:36:20.464+0200] {taskinstance.py:2731} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/pydata_google_auth/auth.py", line 398, in get_user_credentials
+    credentials = _webserver.run_local_server(app_flow, **AUTH_URI_KWARGS)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/pydata_google_auth/_webserver.py", line 89, in run_local_server
+    return app_flow.run_local_server(host=LOCALHOST, port=port, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/google_auth_oauthlib/flow.py", line 458, in run_local_server
+    self.fetch_token(
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/google_auth_oauthlib/flow.py", line 285, in fetch_token
+    return self.oauth2session.fetch_token(self.client_config["token_uri"], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/requests_oauthlib/oauth2_session.py", line 271, in fetch_token
+    self._client.parse_request_uri_response(
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/oauthlib/oauth2/rfc6749/clients/web_application.py", line 220, in parse_request_uri_response
+    response = parse_authorization_code_response(uri, state=state)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/oauthlib/oauth2/rfc6749/parameters.py", line 277, in parse_authorization_code_response
+    raise MismatchingStateError()
+oauthlib.oauth2.rfc6749.errors.MismatchingStateError: (mismatching_state) CSRF Warning! State not equal in request and response.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 444, in _execute_task
+    result = _execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 414, in _execute_callable
+    return execute_callable(context=context, **execute_callable_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/airflow/operators/python.py", line 200, in execute
+    return_value = self.execute_callable()
+                   ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/airflow/operators/python.py", line 217, in execute_callable
+    return self.python_callable(*self.op_args, **self.op_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/dags/dag_daily_fetch_transactions.py", line 35, in fetch_transactions_to_bq
+    df.to_gbq(destination_table=table_id, project_id=BQ_PROJECT, if_exists="replace", location=BQ_LOCATION)
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/pandas/core/frame.py", line 2158, in to_gbq
+    gbq.to_gbq(
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/pandas/io/gbq.py", line 223, in to_gbq
+    pandas_gbq.to_gbq(
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/pandas_gbq/gbq.py", line 568, in to_gbq
+    connector = GbqConnector(
+                ^^^^^^^^^^^^^
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/pandas_gbq/gbq_connector.py", line 100, in __init__
+    self.credentials, default_project = auth.get_credentials(
+                                        ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/pandas_gbq/auth.py", line 37, in get_credentials
+    credentials, default_project_id = pydata_google_auth.default(
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/pydata_google_auth/auth.py", line 151, in default
+    credentials = get_user_credentials(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/arthurcornelio88/jedha/automatic_fraud_detection_b3/dataops_pipeline/.venv/lib/python3.11/site-packages/pydata_google_auth/auth.py", line 405, in get_user_credentials
+    raise exceptions.PyDataCredentialsError(
+pydata_google_auth.exceptions.PyDataCredentialsError: Unable to get valid credentials: (mismatching_state) CSRF Warning! State not equal in request and response.
+[2025-07-08T20:36:20.488+0200] {taskinstance.py:1149} INFO - Marking task as UP_FOR_RETRY. dag_id=daily_fetch_transactions, task_id=fetch_transactions_to_bigquery, execution_date=20250708T183542, start_date=20250708T183545, end_date=20250708T183620
+[2025-07-08T20:36:20.502+0200] {standard_task_runner.py:107} ERROR - Failed to execute job 10 for task fetch_transactions_to_bigquery (Unable to get valid credentials: (mismatching_state) CSRF Warning! State not equal in request and response.; 21418)
+[2025-07-08T20:36:20.554+0200] {local_task_job_runner.py:234} INFO - Task exited with return code 1
+[2025-07-08T20:36:20.565+0200] {taskinstance.py:3312} INFO - 0 downstream tasks scheduled from follow-on schedule check
