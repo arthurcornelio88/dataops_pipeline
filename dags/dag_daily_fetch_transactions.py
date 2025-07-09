@@ -15,9 +15,19 @@ ENDPOINTS = {
 BQ_PROJECT = os.getenv("BQ_PROJECT") or "your_project"
 BQ_DATASET = os.getenv("BQ_DATASET") or "raw_api_data"
 BQ_LOCATION = os.getenv("BQ_LOCATION") or "EU"
+RESET_BQ = os.getenv("RESET_BQ_BEFORE_WRITE", "false").lower() == "true"
 
 # Optional variability level (default = "high")
-FETCH_VARIABILITY = os.getenv("FETCH_VARIABILITY", "medium")  # "low", "medium", "high"
+FETCH_VARIABILITY = os.getenv("FETCH_VARIABILITY", 0)  # 0 to 1, float value
+
+# ========= BIGQUERY TABLE MANAGEMENT ========= #
+def delete_table_if_exists(table_id):
+    client = bigquery.Client()
+    try:
+        client.delete_table(table_id, not_found_ok=True)
+        print(f"🗑️ Table BQ supprimée si existante : {table_id}")
+    except Exception as e:
+        print(f"❌ Erreur lors de la suppression de la table : {e}")
 
 # ========= FETCH + STORE LOGIC ========= #
 def fetch_transactions_to_bq():
@@ -36,10 +46,19 @@ def fetch_transactions_to_bq():
     df = pd.DataFrame(response.json())
     df["ingestion_ts"] = datetime.utcnow().isoformat()
 
+     
     table_id = f"{BQ_PROJECT}.{BQ_DATASET}.daily_{datetime.utcnow().strftime('%Y%m%d')}"
-    df.to_gbq(destination_table=table_id, project_id=BQ_PROJECT, if_exists="replace", location=BQ_LOCATION)
 
+    # if RESET_BQ, reset table of the day BEFORE pushing
+    if RESET_BQ:
+        delete_table_if_exists(table_id)
+    else:
+        print(f"ℹ️ RESET_BQ_BEFORE_WRITE désactivé → pas de suppression de {table_id}")
+
+    # Write to BigQuery
+    df.to_gbq(destination_table=table_id, project_id=BQ_PROJECT, if_exists="replace", location=BQ_LOCATION)
     print(f"✅ {len(df)} transactions ingested into {table_id} [variability={FETCH_VARIABILITY}]")
+
 
 # ========= DAG DEFINITION ========= #
 def_args = {
