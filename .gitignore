@@ -5,3 +5,5 @@ fraud_airflow_bq.json
 airflow_home/
 dags/logs/
 logs/
+api/
+__pycache__/

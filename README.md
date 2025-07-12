@@ -19,3 +19,10 @@ sa
 chmod +x setup_airflow.sh && ./setup_airflow.sh
 ```
 
+===
+
+# In production
+
+- evidently cloud : https://app.jedha.co/course/continuous-monitoring-lds/real-time-monitoring-lds
+
+🚨 ONE THING THAT YOU NEED TO MAKE SURE IS TO ADD THE ENVIRONMENT VARIABLE IN THE AIRFLOW VARIABLES (Admins > Variables) 🚨 You have EVIDENTLY_CLOUD_TOKEN & EVIDENTLY_CLOUD_PROJECT_ID.
