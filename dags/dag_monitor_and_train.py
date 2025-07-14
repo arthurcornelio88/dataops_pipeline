@@ -15,6 +15,7 @@ PREPROCESS_ENDPOINT = os.getenv("PREPROCESS_URL_DEV", "http://localhost:8000/pre
 API_URL_DEV = os.getenv("API_URL_DEV", "http://model-api:8000")
 BQ_LOCATION = os.getenv("BQ_LOCATION") or "EU"
 REFERENCE_FILE = os.getenv("REFERENCE_DATA_PATH", "fraudTest.csv")
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
 
 # ========= DRIFT MONITORING ========= #
 def run_drift_monitoring():
@@ -168,60 +169,121 @@ def decide_if_retrain(**context):
     #     return "end_monitoring"
 
 def retrain_model_step(**context):
-    # 🎯 FINE-TUNING avec vraie API
+    """🧠 FINE-TUNING avec nouvelles données BigQuery → Preprocessing → Fine-tuning"""
     timestamp_date = context['ti'].xcom_pull(task_ids="monitor_drift_report", key="timestamp")
     
     from datetime import datetime
     current_time = datetime.now().strftime("%H%M%S")
     timestamp_full = f"{timestamp_date}_{current_time}"
 
-    print(f"🧠 Starting FINE-TUNING via API on timestamp {timestamp_full}")
+    print(f"🧠 Starting FINE-TUNING pipeline with BigQuery data for {timestamp_full}")
     
-    # Appel API pour fine-tuning
-    res = requests.post(f"{API_URL_DEV}/train", json={
-        "timestamp": timestamp_full,
-        "fast": True,  # Fine-tuning mode (rapide)
-        "test": False,
-        "model_name": "catboost_model.cbm",
-        "mode": "fine_tune",  # Mode fine-tuning
-        "learning_rate": 0.01,  # LR plus bas pour fine-tuning
-        "epochs": 10  # Moins d'epochs
-    })
+    try:
+        # 📥 1. Récupérer les nouvelles données depuis BigQuery
+        today = datetime.utcnow().strftime("%Y%m%d")
+        raw_table = f"{BQ_PROJECT}.{BQ_DATASET}.daily_{today}"
+        print(f"📥 Fetching fresh data from BigQuery table: {raw_table}")
+        bq = bigquery.Client()
+        df_fresh = bq.query(f"SELECT * FROM `{raw_table}` ORDER BY cc_num DESC LIMIT 1000").to_dataframe()  # Fetch the last 1000 records
 
-    if res.status_code != 200:
-        print(f"❌ Fine-tuning API call failed: {res.status_code} - {res.text}")
-        # Fallback sur simulation si API échoue
-        print("🎭 Fallback: Simulating fine-tuning...")
-        import random
-        auc_improvement = random.uniform(0.01, 0.03)
-        current_auc = context['ti'].xcom_pull(task_ids="validate_model", key="val_auc")
-        new_auc = min(0.95, current_auc + auc_improvement)
+        if df_fresh.empty:
+            raise Exception(f"❌ CRITICAL: No fresh data found in BigQuery table {raw_table}! Pipeline cannot continue without data.")
+            
+        print(f"✅ Fetched {len(df_fresh)} fresh samples from BigQuery")
         
-        context['ti'].xcom_push(key="fine_tune_success", value=True)
-        context['ti'].xcom_push(key="auc_improvement", value=auc_improvement)
-        context['ti'].xcom_push(key="new_auc", value=new_auc)
-        print(f"📈 Simulated AUC improvement: {current_auc:.4f} → {new_auc:.4f}")
-        return
-
-    # Traitement de la réponse API
-    result = res.json()
-    print(f"✅ Fine-tuning API response: {result}")
-    
-    if result.get("status") == "fine_tuning_complete":
-        auc_improvement = result.get("auc_improvement", 0.02)
-        current_auc = context['ti'].xcom_pull(task_ids="validate_model", key="val_auc")
-        new_auc = min(0.95, current_auc + auc_improvement)
+        # 🧹 NETTOYER LES COLONNES BIGQUERY AVANT PREPROCESSING
+        print("🧹 Cleaning BigQuery timestamp columns...")
         
-        print(f"🧠 Fine-tuning successful!")
-        print(f"📈 AUC improvement: {current_auc:.4f} → {new_auc:.4f} (+{auc_improvement:.4f})")
+        # Supprimer les colonnes timestamp automatiques de BigQuery
+        bigquery_cols_to_drop = ["ingestion_ts", "created_at", "updated_at", "_ingestion_time"]
+        cols_to_drop = [col for col in bigquery_cols_to_drop if col in df_fresh.columns]
         
-        # Stocker les résultats
-        context['ti'].xcom_push(key="fine_tune_success", value=True)
-        context['ti'].xcom_push(key="auc_improvement", value=auc_improvement)
-        context['ti'].xcom_push(key="new_auc", value=new_auc)
-    else:
-        print(f"⚠️ Fine-tuning status: {result.get('status')}")
-        context['ti'].xcom_push(key="fine_tune_success", value=False)
+        if cols_to_drop:
+            print(f"🧹 Removing BigQuery timestamp columns: {cols_to_drop}")
+            df_fresh = df_fresh.drop(columns=cols_to_drop)
+        
+        print(f"📊 Cleaned data shape: {df_fresh.shape}")
+        print(f"🔍 Remaining columns: {list(df_fresh.columns)}")
+        
+        # Vérifier la distribution des classes avant preprocessing
+        if "is_fraud" in df_fresh.columns:
+            fraud_ratio = df_fresh["is_fraud"].mean()
+            print(f"📊 Fraud ratio in fresh data: {fraud_ratio:.4f} ({df_fresh['is_fraud'].sum()} frauds out of {len(df_fresh)})")
+            
+            if fraud_ratio == 0.0:
+                print("⚠️ No fraud cases in fresh data, fine-tuning may not be effective...")
+        
+        # 🔄 2. Preprocesser ces nouvelles données avec /preprocess_direct
+        print("🔄 Preprocessing fresh data with /preprocess_direct...")
+        
+        preprocess_res = requests.post(f"{API_URL_DEV}/preprocess_direct", json={
+            "data": df_fresh.to_dict(orient="records"),
+            "log_amt": True,
+            "for_prediction": False,  # Pour training, pas prediction
+            "output_dir": "/app/shared_data"
+        }, timeout=300)
+        
+        if preprocess_res.status_code != 200:
+            raise Exception(f"❌ Preprocessing failed: {preprocess_res.status_code} - {preprocess_res.text}")
+        
+        preprocess_result = preprocess_res.json()
+        fresh_timestamp = preprocess_result.get("timestamp")
+        print(f"✅ Preprocessing completed with timestamp: {fresh_timestamp}")
+        
+        # 🧠 3. Fine-tuning avec les données préprocessées
+        print("🧠 Starting fine-tuning with preprocessed data...")
+        
+        finetune_res = requests.post(f"{API_URL_DEV}/train", json={
+            "timestamp": fresh_timestamp,  # Utiliser les données fraîches
+            "fast": True,
+            "test": False,
+            "model_name": "catboost_model.cbm",
+            "mode": "fine_tune",
+            "learning_rate": 0.01,
+            "epochs": 10
+        }, timeout=600)  # 10 minutes pour le fine-tuning
+        
+        if finetune_res.status_code != 200:
+            raise Exception(f"❌ Fine-tuning failed: {finetune_res.status_code} - {finetune_res.text}")
+        
+        # Traitement de la réponse du fine-tuning
+        result = finetune_res.json()
+        print(f"✅ Fine-tuning API response: {result}")
+        print(f"🔍 DEBUG: API response keys: {list(result.keys())}")
+        print(f"🔍 DEBUG: model_path in response: {result.get('model_path', 'MISSING')}")
+        
+        # 🚨 PRODUCTION: Pas de fallback - le model_path DOIT être dans la réponse
+        if "model_path" not in result:
+            raise Exception(f"❌ CRITICAL: model_path missing from API response! Response: {result}")
+        
+        if result.get("status") == "fine_tuning_complete" or result.get("model_updated"):
+            new_auc = result.get("auc")
+            model_path = result["model_path"]  # 🚨 Pas de fallback!
+            
+            if new_auc is None:
+                raise Exception(f"❌ CRITICAL: AUC missing from API response! Response: {result}")
+            
+            current_auc = context['ti'].xcom_pull(task_ids="validate_model", key="val_auc")
+            auc_improvement = new_auc - current_auc if current_auc > 0 else 0.02
+            
+            print(f"🔍 DEBUG: Extracted model_path: {model_path}")
+            print(f"� DEBUG: AUC: {current_auc:.4f} → {new_auc:.4f} (+{auc_improvement:.4f})")
+            
+            print(f"🧠 Fine-tuning successful with fresh BigQuery data!")
+            print(f"📈 AUC improvement: {current_auc:.4f} → {new_auc:.4f} (+{auc_improvement:.4f})")
+            
+            # Stocker les résultats
+            context['ti'].xcom_push(key="fine_tune_success", value=True)
+            context['ti'].xcom_push(key="auc_improvement", value=auc_improvement)
+            context['ti'].xcom_push(key="new_auc", value=new_auc)
+            context['ti'].xcom_push(key="model_path", value=model_path)  # 🔧 Stocker le chemin
+        else:
+            raise Exception(f"❌ CRITICAL: Fine-tuning failed or invalid status! Response: {result}")
+            
+    except Exception as e:
+        print(f"❌ Fine-tuning pipeline failed: {e}")
+        # 🚨 PRODUCTION: Pas de fallback - on fait échouer la tâche
+        raise e
 
 def end_monitoring(**context):
 
@@ -254,16 +316,31 @@ def end_monitoring(**context):
     print("🧾 Environnement     :", ENV)
     print("--------------------------------------------\n")
 
-    # === Slack Notification if needed
+    # === Discord Notifications
+    # 🚨 ALERTE DE MONITORING - Se déclenche d'abord si drift/mauvaise performance
     if drift or (auc != -1.0 and auc < 0.90):
-        send_slack_alert(drift=drift, auc=auc, retrained=(retrained == "retrain_model"))
+        send_discord_alert(drift=drift, auc=auc, retrained=(retrained == "retrain_model"))
+    
+    # 🎉 SUCCÈS DE FINE-TUNING - Se déclenche EN PLUS si le fine-tuning réussit
+    if fine_tune_success and auc_improvement and auc_improvement > 0:
+        send_fine_tuning_success_alert(context)
+
 
     # === Log vers BigQuery
     validation_type = ti.xcom_pull(task_ids="validate_model", key="validation_type") or "unknown"
     validation_samples = ti.xcom_pull(task_ids="validate_model", key="validation_samples") or 0
     
+    # 🔧 FIX: Convertir exec_date string en datetime pour BigQuery
+    from datetime import datetime as dt
+    if isinstance(exec_date, str):
+        # Parse la string datetime
+        timestamp_dt = dt.strptime(exec_date, "%Y-%m-%d %H:%M:%S")
+    else:
+        # C'est déjà un objet datetime
+        timestamp_dt = exec_date
+    
     audit = pd.DataFrame([{
-        "timestamp": exec_date,
+        "timestamp": timestamp_dt,  # Utiliser l'objet datetime
         "drift_detected": drift,
         "auc": auc,
         "retrained": retrained == "retrain_model",
@@ -286,38 +363,125 @@ def end_monitoring(**context):
 
 ### Auxiliar functions
 
-def send_slack_alert(drift, auc, retrained):
-    webhook_url = os.getenv("SLACK_WEBHOOK_URL")
+def send_fine_tuning_success_alert(context):
+    """Envoie une alerte Discord pour célébrer le succès du fine-tuning"""
+    # 📊 Récupérer les métriques depuis les tâches précédentes
+    fine_tune_success = context['ti'].xcom_pull(task_ids="retrain_model", key="fine_tune_success")
+    auc_improvement = context['ti'].xcom_pull(task_ids="retrain_model", key="auc_improvement")
+    new_auc = context['ti'].xcom_pull(task_ids="retrain_model", key="new_auc")
+    model_path = context['ti'].xcom_pull(task_ids="retrain_model", key="model_path")
+    
+    print(f"🔍 DEBUG Discord: fine_tune_success={fine_tune_success}")
+    print(f"🔍 DEBUG Discord: auc_improvement={auc_improvement}")
+    print(f"🔍 DEBUG Discord: new_auc={new_auc}")
+    print(f"🔍 DEBUG Discord: model_path={model_path}")
+    
+    # 🚨 PRODUCTION: Pas de fallbacks - toutes les valeurs doivent être présentes
+    if not fine_tune_success:
+        raise Exception("❌ CRITICAL: fine_tune_success not found in XCom!")
+    if auc_improvement is None:
+        raise Exception("❌ CRITICAL: auc_improvement not found in XCom!")
+    if new_auc is None:
+        raise Exception("❌ CRITICAL: new_auc not found in XCom!")
+    if model_path is None:
+        raise Exception("❌ CRITICAL: model_path not found in XCom!")
+    
+    # 🎯 Seulement si le fine-tuning a vraiment réussi
+    if not fine_tune_success:
+        print("🤖 Fine-tuning success flag not set, skipping Discord celebration")
+        return
+    
+    # 🌟 Message de célébration
+    try:
+        webhook_url = DISCORD_WEBHOOK_URL
+        if not webhook_url:
+            print("⚠️ No Discord webhook URL configured in environment variables")
+            return
+        
+        if auc_improvement > 0.01:  # Amélioration significative
+            message = f"""🎉 **EXCELLENT! Fine-tuning réussi avec BigQuery!** 🎉
+
+📊 **Performance améliorée:** AUC +{auc_improvement:.4f} (maintenant {new_auc:.4f})
+🧠 **Modèle mis à jour:** {model_path}
+⚡ **Données fraîches:** Dernières 500 transactions BigQuery
+🚀 **Statut:** Production ready!
+
+*Le modèle de détection de fraude est plus intelligent! 🤖*"""
+        else:
+            message = f"""✅ **Fine-tuning BigQuery completed!** ✅
+    
+📊 **Performance maintenue:** AUC {new_auc:.4f}
+🧠 **Modèle actualisé:** {model_path}
+🔄 **Données synchronisées:** 500 dernières transactions
+📊 **Statut:** Modèle à jour et opérationnel
+
+*Continuons à surveiller les performances! 👀*"""
+            
+        response = requests.post(webhook_url, json={"content": message})
+        
+        if response.status_code in [200, 204]:  # 200 = OK, 204 = No Content (both are success)
+            print(f"🎊 Discord success notification sent! Status: {response.status_code}")
+        elif response.status_code == 404:
+            print(f"❌ Discord webhook not found (404). Please check webhook URL or recreate it.")
+            print(f"🔗 Webhook URL: {webhook_url[:50]}...")
+        else:
+            print(f"⚠️ Discord notification failed with status {response.status_code}: {response.text}")
+        
+    except Exception as e:
+        print(f"⚠️ Failed to send Discord success alert: {e}")
+
+
+def send_discord_alert(drift, auc, retrained):
+    """Notification Discord pour les alertes de performance/problèmes"""
+    webhook_url = DISCORD_WEBHOOK_URL
     if not webhook_url:
-        print("⚠️ No Slack webhook configured.")
+        print("⚠️ No Discord webhook URL configured in environment variables")
         return
 
-    text = f"""
-    🚨 *Monitoring Alert* 🚨
-    Date: {datetime.utcnow().strftime('%Y-%m-%d')}
-    Drift detected: *{drift}*
-    Validation AUC: *{auc:.4f}*
-    Retraining triggered: *{retrained}*
-    """
+    # Message d'alerte général de monitoring
+    message = f"""🚨 **Monitoring Alert** 🚨
 
+📅 Date: {datetime.utcnow().strftime('%Y-%m-%d')}
+📌 Drift detected: {drift}
+📈 Validation AUC: {auc:.4f}
+🔁 Retraining triggered: {retrained}
+---
+"""
+    
     try:
-        res = requests.post(webhook_url, json={"text": text.strip()})
-        res.raise_for_status()
-        print("✅ Slack alert sent.")
+        response = requests.post(webhook_url, json={"content": message})
+        
+        if response.status_code in [200, 204]:  # 200 = OK, 204 = No Content (both are success)
+            print("✅ Monitoring alert sent to Discord.")
+        else:
+            print(f"⚠️ Discord alert failed with status {response.status_code}: {response.text}")
+            
     except requests.exceptions.RequestException as e:
-        print(f"❌ Slack alert failed: {e}")
+        print(f"❌ Discord alert failed: {e}")
+
 
 def create_monitoring_table_if_needed():
-
-    table_id = f"{BQ_PROJECT}.monitoring_audit.logs"
+    dataset_id = f"{BQ_PROJECT}.monitoring_audit"
+    table_id = f"{dataset_id}.logs"
     client = bigquery.Client()
 
+    # Vérifie si le dataset existe
+    try:
+        client.get_dataset(dataset_id)
+        print(f"✅ Dataset exists: {dataset_id}")
+    except Exception:
+        print(f"⚠️ Dataset not found. Creating: {dataset_id}")
+        dataset = bigquery.Dataset(dataset_id)
+        dataset.location = BQ_LOCATION
+        client.create_dataset(dataset)
+        print(f"✅ Dataset created: {dataset_id}")
+
+    # Vérifie si la table existe
     try:
         client.get_table(table_id)
         print(f"✅ Table already exists: {table_id}")
     except Exception:
         print(f"⚠️ Table not found, creating: {table_id}")
-
         schema = [
             bigquery.SchemaField("timestamp", "TIMESTAMP"),
             bigquery.SchemaField("drift_detected", "BOOL"),
@@ -330,10 +494,10 @@ def create_monitoring_table_if_needed():
             bigquery.SchemaField("auc_improvement", "FLOAT"),
             bigquery.SchemaField("new_auc", "FLOAT"),
         ]
-
         table = bigquery.Table(table_id, schema=schema)
-        table = client.create_table(table)
+        client.create_table(table)
         print(f"✅ Table created: {table_id}")
+
 
 # ========= DAG ========= #
 def_args = {
