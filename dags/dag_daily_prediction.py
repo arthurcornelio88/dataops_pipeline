@@ -2,9 +2,9 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
 import os
+from outils import get_storage_path, host_to_docker_path, get_secret
 import requests
 import pandas as pd
-from pandas_gbq import to_gbq
 from google.cloud import bigquery
 
 # ========= ENV VARS ========= #
@@ -12,16 +12,25 @@ ENV = os.getenv("ENV", "DEV")
 BQ_PROJECT = os.getenv("BQ_PROJECT") or "your_project"
 BQ_DATASET = os.getenv("BQ_DATASET") or "raw_api_data"
 BQ_PREDICT_DATASET = os.getenv("BQ_PREDICT_DATASET") or "predictions"
-PREDICT_ENDPOINT = os.getenv("PREDICT_URL_DEV") if ENV == "DEV" else os.getenv("PREDICT_URL_PROD")
-API_URL_DEV = os.getenv("API_URL_DEV") or "http://localhost:8000"
 BQ_LOCATION = os.getenv("BQ_LOCATION") or "EU"
+
+if ENV == "PROD":
+    PREDICT_ENDPOINT = get_secret("prod-api-url", BQ_PROJECT)
+    API_URL_DEV = get_secret("prod-api-url", BQ_PROJECT).replace("/predict", "")
+else:
+    PREDICT_ENDPOINT = os.getenv("PREDICT_URL_DEV")
+    API_URL_DEV = os.getenv("API_URL_DEV") or "http://localhost:8000"
 
 # ========= PREDICTION TASK ========= #
 def run_daily_prediction():
     today = datetime.utcnow().strftime("%Y%m%d")
     timestamp = None
-    shared_data_dir = os.path.abspath("../shared_data")
-    os.makedirs(shared_data_dir, exist_ok=True)
+    preprocessed_dir = get_storage_path("preprocessed", None)
+    predictions_dir = get_storage_path("predictions", None)
+    # Only create local dirs in DEV
+    if ENV == "DEV":
+        os.makedirs(preprocessed_dir, exist_ok=True)
+        os.makedirs(predictions_dir, exist_ok=True)
 
     raw_table = f"{BQ_PROJECT}.{BQ_DATASET}.daily_{today}"
     pred_table = f"{BQ_PROJECT}.{BQ_PREDICT_DATASET}.daily_{today}"
@@ -33,48 +42,83 @@ def run_daily_prediction():
 
     # 2️⃣ Appel à l'API pour preprocessing
     print(f"📡 Sending data to /preprocess_direct")
+    # Set output_dir for preprocessing (env-aware)
+    output_dir = get_storage_path("preprocessed", None)
+    if output_dir.endswith("/"):
+        output_dir = output_dir[:-1]
     res = requests.post(f"{API_URL_DEV}/preprocess_direct", json={
         "data": df.to_dict(orient="records"),
         "log_amt": True,
         "for_prediction": True,
-        "output_dir": "/app/shared_data"  # Important pour Docker
+        "output_dir": output_dir
     })
+    print(f"🔍 /preprocess_direct response: status={res.status_code}, text={res.text}")
     if res.status_code != 200:
         raise Exception(f"❌ Preprocessing failed: {res.status_code} - {res.text}")
+    try:
+        timestamp = res.json()["timestamp"]
+    except Exception as e:
+        raise Exception(f"❌ Could not extract timestamp from /preprocess_direct response: {res.text}")
+    # Path to preprocessed features
+    X_local_path = get_storage_path("preprocessed", f"X_pred_{timestamp}.csv")
+    X_api_path = get_storage_path("preprocessed", f"X_pred_{timestamp}.csv")
 
-    timestamp = res.json()["timestamp"]
-    X_local_path = os.path.join(shared_data_dir, f"X_pred_{timestamp}.csv")
-    X_api_path = f"/app/shared_data/X_pred_{timestamp}.csv"
-
-    if not os.path.exists(X_local_path):
+    if ENV == "DEV" and not os.path.exists(X_local_path):
         raise FileNotFoundError(f"⛔ Fichier préprocessé introuvable: {X_local_path}")
 
     # 3️⃣ Nettoyage des colonnes objets
     df_x = pd.read_csv(X_local_path)
     drop_cols = [col for col in df_x.columns if df_x[col].dtype == "object"]
+    cleaned_pred_path = get_storage_path("predictions", f"X_pred_{timestamp}.csv")
     if drop_cols:
         print(f"🧹 Removing non-numeric columns: {drop_cols}")
-        df_x.drop(columns=drop_cols).to_csv(X_local_path, index=False)
+        df_x = df_x.drop(columns=drop_cols)
+    df_x.to_csv(cleaned_pred_path, index=False)
+    X_api_path = cleaned_pred_path
 
     # 4️⃣ Prédiction via API
-    output_local_path = os.path.join(shared_data_dir, f"predictions_{today}.csv")
-    output_api_path = output_local_path.replace(shared_data_dir, "/app/shared_data")
-    os.makedirs(os.path.dirname(output_local_path), exist_ok=True)
+    output_local_path = get_storage_path("predictions", f"predictions_{today}.csv")
+    output_api_path = get_storage_path("predictions", f"predictions_{today}.csv")
+    if ENV == "DEV":
+        os.makedirs(predictions_dir, exist_ok=True)
+
+    # Conversion host->docker uniquement pour l'appel API en DEV
+    if ENV == "DEV":
+        X_api_path_api = host_to_docker_path(X_api_path)
+        output_api_path_api = host_to_docker_path(output_api_path)
+    else:
+        X_api_path_api = X_api_path
+        output_api_path_api = output_api_path
 
     print(f"🤖 Sending data to /predict")
-    res = requests.post(PREDICT_ENDPOINT, json={
-        "input_path": X_api_path,           # 🟢 Chemin vers X_pred...
-        "output_path": output_api_path      # 🟢 Chemin vers predictions...
+    res_pred = requests.post(PREDICT_ENDPOINT, json={
+        "input_path": X_api_path_api,           # 🟢 Chemin vers X_pred...
+        "output_path": output_api_path_api      # 🟢 Chemin vers predictions...
     })
-    if res.status_code != 200:
-        raise Exception(f"❌ Predict failed: {res.status_code} - {res.text}")
+    print(f"🔍 /predict response: status={res_pred.status_code}, text={res_pred.text}")
+    if res_pred.status_code != 200:
+        raise Exception(f"❌ Predict failed: {res_pred.status_code} - {res_pred.text}")
 
     # 5️⃣ Upload prédictions dans BigQuery
     print(f"📤 Uploading predictions to: {pred_table}")
-    df_pred = pd.read_csv(output_local_path)
+    if ENV == "DEV":
+        df_pred = pd.read_csv(output_local_path)
+    else:
+        # In PROD, ensure predictions file exists in GCS before uploading to BQ
+        from google.cloud import storage
+        bucket_name = os.getenv("GCS_BUCKET") or os.getenv("GCP_BUCKET", "fraud-detection-jedha2024")
+        storage_client = storage.Client()
+        blob_path = output_local_path.replace(f"gs://{bucket_name}/", "")
+        temp_path = f"/tmp/predictions_{today}.csv"
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        if not blob.exists():
+            raise FileNotFoundError(f"⛔ Prediction file not found in GCS: {output_local_path}. API->GCS step failed.")
+        blob.download_to_filename(temp_path)
+        df_pred = pd.read_csv(temp_path)
     df_pred["prediction_ts"] = datetime.utcnow().isoformat()
 
-    to_gbq(df_pred, destination_table=pred_table, project_id=BQ_PROJECT, if_exists="append", location=BQ_LOCATION)
+    df_pred.to_gbq(destination_table=pred_table, project_id=BQ_PROJECT, if_exists="append", location=BQ_LOCATION)
     print(f"✅ Predictions saved to {pred_table}")
 
 # ========= DAG DEFINITION ========= #

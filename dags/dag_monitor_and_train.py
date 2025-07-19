@@ -2,6 +2,7 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator, BranchPythonOperator, get_current_context
 from datetime import datetime, timedelta
 import os
+from outils import get_storage_path, get_secret
 import requests
 from google.cloud import bigquery
 import pandas as pd
@@ -10,23 +11,27 @@ import pandas as pd
 ENV = os.getenv("ENV", "DEV")
 BQ_PROJECT = os.getenv("BQ_PROJECT") or "your_project"
 BQ_DATASET = os.getenv("BQ_DATASET", "raw_api_data")
-MONITOR_ENDPOINT = os.getenv("MONITOR_URL_DEV", "http://model-api:8000/monitor") if ENV == "DEV" else os.getenv("MONITOR_URL_PROD")
-PREPROCESS_ENDPOINT = os.getenv("PREPROCESS_URL_DEV", "http://localhost:8000/preprocess")
-API_URL_DEV = os.getenv("API_URL_DEV", "http://model-api:8000")
 BQ_LOCATION = os.getenv("BQ_LOCATION") or "EU"
-REFERENCE_FILE = os.getenv("REFERENCE_DATA_PATH", "fraudTest.csv")
-DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
+
+if ENV == "PROD":
+    API_URL = get_secret("prod-api-url", BQ_PROJECT).replace("/predict", "")
+    REFERENCE_FILE = get_secret("reference-data-path", BQ_PROJECT)
+    DISCORD_WEBHOOK_URL = get_secret("discord-webhook-url", BQ_PROJECT)
+else:
+    API_URL = os.getenv("API_URL_DEV", "http://model-api:8000")
+    REFERENCE_FILE = os.getenv("REFERENCE_DATA_PATH", "fraudTest.csv")
+    DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
 
 # ========= DRIFT MONITORING ========= #
 def run_drift_monitoring():
     # === Config
     today = datetime.utcnow().strftime("%Y%m%d")
-    shared_dir = os.path.abspath("../shared_data")
+    shared_dir = get_storage_path("", "")
     os.makedirs(shared_dir, exist_ok=True)
 
     # === Paths
     curr_filename = f"current_{today}.csv"
-    curr_path = os.path.join(shared_dir, curr_filename)
+    curr_path = get_storage_path("", curr_filename)
     output_html_name = f"data_drift_{today}.html"
 
     # === Load & Save and clean current data from BigQuery
@@ -50,7 +55,7 @@ def run_drift_monitoring():
         df_curr = df_curr.drop(columns=cols_to_drop)
     
     # === Créer un fichier de référence filtré avec les mêmes colonnes
-    ref_path = os.path.join(shared_dir, REFERENCE_FILE)
+    ref_path = get_storage_path("", REFERENCE_FILE)
     df_ref = pd.read_csv(ref_path)
     
     # Filtrer le fichier de référence pour avoir les mêmes colonnes que current
@@ -59,7 +64,7 @@ def run_drift_monitoring():
     
     # Sauvegarder le fichier de référence filtré
     ref_filtered_name = f"ref_filtered_{today}.csv"
-    ref_filtered_path = os.path.join(shared_dir, ref_filtered_name)
+    ref_filtered_path = get_storage_path("", ref_filtered_name)
     df_ref_filtered.to_csv(ref_filtered_path, index=False)
     
     print(f"📊 Common columns for drift: {common_cols}")
@@ -68,7 +73,8 @@ def run_drift_monitoring():
     df_curr.to_csv(curr_path, index=False)
 
     # === API call to /monitor
-    res = requests.post(MONITOR_ENDPOINT, json={
+    monitor_endpoint = os.path.join(API_URL,"/monitor")
+    res = requests.post(monitor_endpoint, json={
         "reference_path": ref_filtered_name,
         "current_path": curr_filename,
         "output_html": output_html_name
@@ -121,7 +127,8 @@ def run_validation_step(**context):
     
     # === Appel API pour validation production
     print(f"🎯 Validation via API avec {len(df_validation)} échantillons")
-    res = requests.post(f"{API_URL_DEV}/validate", json={
+    validate_endpoint = os.path.join(API_URL, "/validate")
+    res = requests.post(validate_endpoint, json={
         "model_name": "catboost_model.cbm",
         "validation_mode": "production",
         "production_data": {
@@ -215,8 +222,8 @@ def retrain_model_step(**context):
         
         # 🔄 2. Preprocesser ces nouvelles données avec /preprocess_direct
         print("🔄 Preprocessing fresh data with /preprocess_direct...")
-        
-        preprocess_res = requests.post(f"{API_URL_DEV}/preprocess_direct", json={
+        preprocess_endpoint = os.path.join(API_URL, "/preprocess_direct")
+        preprocess_res = requests.post(preprocess_endpoint, json={
             "data": df_fresh.to_dict(orient="records"),
             "log_amt": True,
             "for_prediction": False,  # Pour training, pas prediction
@@ -233,7 +240,8 @@ def retrain_model_step(**context):
         # 🧠 3. Fine-tuning avec les données préprocessées
         print("🧠 Starting fine-tuning with preprocessed data...")
         
-        finetune_res = requests.post(f"{API_URL_DEV}/train", json={
+        train_endpoint = os.path.join(API_URL, "/train")
+        finetune_res = requests.post(train_endpoint, json={
             "timestamp": fresh_timestamp,  # Utiliser les données fraîches
             "fast": True,
             "test": False,

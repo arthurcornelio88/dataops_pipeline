@@ -5,13 +5,25 @@ import pandas as pd
 import requests
 import os
 from google.cloud import bigquery
+from outils import get_secret
+
 
 # ========= ENV MANAGEMENT ========= #
+BQ_PROJECT = os.getenv("BQ_PROJECT") or "your_project"
 ENV = os.getenv("ENV", "DEV")
-ENDPOINTS = {
-    "DEV": os.getenv("DEV_TRANSACTION_URL", "http://localhost:8001/transactions"),
-    "PROD": os.getenv("PROD_TRANSACTION_URL")  # ex: https://mock-api-service/api/transactions
-}
+
+if ENV == "PROD":
+    # Fetch endpoint from Google Secret Manager
+    PROD_ENDPOINT = get_secret("prod-api-url", BQ_PROJECT)
+    ENDPOINTS = {
+        "DEV": os.getenv("DEV_TRANSACTION_URL", "http://localhost:8001/transactions"),
+        "PROD": PROD_ENDPOINT
+    }
+else:
+    ENDPOINTS = {
+        "DEV": os.getenv("DEV_TRANSACTION_URL", "http://localhost:8001/transactions"),
+        "PROD": os.getenv("PROD_TRANSACTION_URL")
+    }
 BQ_PROJECT = os.getenv("BQ_PROJECT") or "your_project"
 BQ_DATASET = os.getenv("BQ_DATASET") or "raw_api_data"
 BQ_LOCATION = os.getenv("BQ_LOCATION") or "EU"
