@@ -9,28 +9,24 @@ from outils import get_secret
 
 
 # ========= ENV MANAGEMENT ========= #
-BQ_PROJECT = get_secret("BQ_PROJECT") or "your_project"
-ENV = os.getenv("ENV", "DEV")
+ENV = os.getenv("ENV") # Define it in .env.airflow
+PROJECT = os.getenv("GCP_PROJECT") # Define it in .env.airflow
 
 if ENV == "PROD":
     # Fetch endpoint from Google Secret Manager
-    PROD_ENDPOINT = get_secret("prod-api-url", BQ_PROJECT)
-    ENDPOINTS = {
-        "DEV": os.getenv("DEV_TRANSACTION_URL", "http://localhost:8001/transactions"),
-        "PROD": PROD_ENDPOINT
-    }
+    BQ_PROJECT = PROJECT
+    API_URL = get_secret("prod-api-url", PROJECT)
+    BQ_RAW_DATASET = get_secret("bq-raw-dataset", PROJECT)
+    BQ_LOCATION = get_secret("bq-location", PROJECT)
+    RESET_BQ = get_secret("reset-bq-before-write", PROJECT)
+    FETCH_VARIABILITY = get_secret("fetch-variability", PROJECT)
 else:
-    ENDPOINTS = {
-        "DEV": os.getenv("DEV_TRANSACTION_URL", "http://localhost:8001/transactions"),
-        "PROD": os.getenv("PROD_TRANSACTION_URL")
-    }
-BQ_PROJECT = os.getenv("BQ_PROJECT") or "your_project"
-BQ_DATASET = os.getenv("BQ_DATASET") or "raw_api_data"
-BQ_LOCATION = os.getenv("BQ_LOCATION") or "EU"
-RESET_BQ = os.getenv("RESET_BQ_BEFORE_WRITE", "false").lower() == "true"
-
-# Optional variability level (default = "high")
-FETCH_VARIABILITY = os.getenv("FETCH_VARIABILITY", 0)  # 0 to 1, float value
+    API_URL = os.getenv("API_URL_DEV")
+    BQ_PROJECT = os.getenv("BQ_PROJECT")
+    BQ_RAW_DATASET = os.getenv("BQ_RAW_DATASET")
+    BQ_LOCATION = os.getenv("BQ_LOCATION")
+    RESET_BQ = os.getenv("RESET_BQ_BEFORE_WRITE", "false").lower() == "true"
+    FETCH_VARIABILITY = os.getenv("FETCH_VARIABILITY", 0)  # 0 to 1, float value
 
 # ========= BIGQUERY TABLE MANAGEMENT ========= #
 def delete_table_if_exists(table_id):
@@ -43,7 +39,7 @@ def delete_table_if_exists(table_id):
 
 # ========= FETCH + STORE LOGIC ========= #
 def fetch_transactions_to_bq():
-    url = ENDPOINTS.get(ENV)
+    url = API_URL
     if not url:
         raise ValueError(f"❌ No endpoint defined for ENV: {ENV}")
 
@@ -59,7 +55,7 @@ def fetch_transactions_to_bq():
     df["ingestion_ts"] = datetime.utcnow().isoformat()
 
      
-    table_id = f"{BQ_PROJECT}.{BQ_DATASET}.daily_{datetime.utcnow().strftime('%Y%m%d')}"
+    table_id = f"{BQ_PROJECT}.{BQ_RAW_DATASET}.daily_{datetime.utcnow().strftime('%Y%m%d')}"
 
     # if RESET_BQ, reset table of the day BEFORE pushing
     if RESET_BQ:

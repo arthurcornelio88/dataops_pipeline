@@ -8,19 +8,24 @@ from google.cloud import bigquery
 import pandas as pd
 
 # ========= ENV & CONFIG ========= #
-ENV = os.getenv("ENV", "DEV")
-BQ_PROJECT = os.getenv("BQ_PROJECT") or "your_project"
-BQ_DATASET = os.getenv("BQ_DATASET", "raw_api_data")
-BQ_LOCATION = os.getenv("BQ_LOCATION") or "EU"
+ENV = os.getenv("ENV") # Define it in .env.airflow
+PROJECT = os.getenv("PROJECT") # Define it in .env.airflow 
 
 if ENV == "PROD":
-    API_URL = get_secret("prod-api-url", BQ_PROJECT).replace("/predict", "")
-    REFERENCE_FILE = get_secret("reference-data-path", BQ_PROJECT)
-    DISCORD_WEBHOOK_URL = get_secret("discord-webhook-url", BQ_PROJECT)
+    API_URL = get_secret("prod-api-url", PROJECT)
+    REFERENCE_FILE = get_secret("reference-data-path", PROJECT)
+    DISCORD_WEBHOOK_URL = get_secret("discord-webhook-url", PROJECT)
+    BQ_PROJECT = PROJECT
+    BQ_RAW_DATASET = get_secret("bq-raw-dataset", PROJECT)
+    BQ_LOCATION = get_secret("bq-location", PROJECT)
+
 else:
     API_URL = os.getenv("API_URL_DEV", "http://model-api:8000")
     REFERENCE_FILE = os.getenv("REFERENCE_DATA_PATH", "fraudTest.csv")
-    DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
+    DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+    BQ_PROJECT = os.getenv("BQ_PROJECT")
+    BQ_RAW_DATASET = os.getenv("BQ_RAW_DATASET")
+    BQ_LOCATION = os.getenv("BQ_LOCATION")
 
 # ========= DRIFT MONITORING ========= #
 def run_drift_monitoring():
@@ -35,7 +40,7 @@ def run_drift_monitoring():
     output_html_name = f"data_drift_{today}.html"
 
     # === Load & Save and clean current data from BigQuery
-    curr_table = f"{BQ_PROJECT}.{BQ_DATASET}.daily_{today}"
+    curr_table = f"{BQ_PROJECT}.{BQ_RAW_DATASET}.daily_{today}"
     df_curr = bigquery.Client().query(f"SELECT * FROM `{curr_table}`").to_dataframe()
 
     # === Nettoyage des colonnes non-numériques de BigQuery
@@ -110,7 +115,7 @@ def run_validation_step(**context):
         p.is_fraud_pred,
         r.is_fraud as true_label
     FROM `{BQ_PROJECT}.predictions.daily_{today}` p
-    INNER JOIN `{BQ_PROJECT}.{BQ_DATASET}.daily_{today}` r
+    INNER JOIN `{BQ_PROJECT}.{BQ_RAW_DATASET}.daily_{today}` r
     ON CAST(p.cc_num AS STRING) = CAST(r.cc_num AS STRING)
     WHERE r.is_fraud IS NOT NULL
     """
@@ -188,7 +193,7 @@ def retrain_model_step(**context):
     try:
         # 📥 1. Récupérer les nouvelles données depuis BigQuery
         today = datetime.utcnow().strftime("%Y%m%d")
-        raw_table = f"{BQ_PROJECT}.{BQ_DATASET}.daily_{today}"
+        raw_table = f"{BQ_PROJECT}.{BQ_RAW_DATASET}.daily_{today}"
         print(f"📥 Fetching fresh data from BigQuery table: {raw_table}")
         bq = bigquery.Client()
         df_fresh = bq.query(f"SELECT * FROM `{raw_table}` ORDER BY cc_num DESC LIMIT 1000").to_dataframe()  # Fetch the last 1000 records

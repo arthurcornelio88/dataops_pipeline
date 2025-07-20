@@ -49,6 +49,8 @@ export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/fraud_airflow_bq.json"
 
 # BigQuery config
 export BQ_PROJECT="jedha2024"
-export BQ_DATASET="raw_api_data"
+export BQ_RAW_DATASET="raw_api_data"
 export BQ_PREDICT_DATASET="predictions"
 export BQ_LOCATION="EU"
+
+TODO: prod part. to attach to google secrets

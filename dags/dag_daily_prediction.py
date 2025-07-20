@@ -8,18 +8,22 @@ import pandas as pd
 from google.cloud import bigquery
 
 # ========= ENV VARS ========= #
-ENV = os.getenv("ENV", "DEV")
-BQ_PROJECT = os.getenv("BQ_PROJECT") or "your_project"
-BQ_DATASET = os.getenv("BQ_DATASET") or "raw_api_data"
-BQ_PREDICT_DATASET = os.getenv("BQ_PREDICT_DATASET") or "predictions"
-BQ_LOCATION = os.getenv("BQ_LOCATION") or "EU"
+ENV = os.getenv("ENV") # Define it in .env.airflow
+PROJECT = os.getenv("PROJECT")  # Define it in .env.airflow
 
 if ENV == "PROD":
-    PREDICT_ENDPOINT = get_secret("prod-api-url", BQ_PROJECT)
-    API_URL = get_secret("prod-api-url", BQ_PROJECT).replace("/predict", "")
+    # Fetch endpoint from Google Secret Manager
+    BQ_PROJECT = PROJECT
+    API_URL = get_secret("prod-api-url", PROJECT)
+    BQ_RAW_DATASET = get_secret("bq-raw-dataset", PROJECT)
+    BQ_PREDICT_DATASET = get_secret("bq-predict-dataset", PROJECT)
+    BQ_LOCATION = get_secret("bq-location", PROJECT)
 else:
-    PREDICT_ENDPOINT = os.getenv("PREDICT_URL_DEV")
-    API_URL = os.getenv("API_URL_DEV") or "http://localhost:8000"
+    API_URL = os.getenv("API_URL_DEV")
+    BQ_PROJECT = os.getenv("BQ_PROJECT")
+    BQ_RAW_DATASET = os.getenv("BQ_RAW_DATASET")
+    BQ_PREDICT_DATASET = os.getenv("BQ_PREDICT_DATASET")
+    BQ_LOCATION = os.getenv("BQ_LOCATION")
 
 # ========= PREDICTION TASK ========= #
 def run_daily_prediction():
@@ -32,7 +36,7 @@ def run_daily_prediction():
         os.makedirs(preprocessed_dir, exist_ok=True)
         os.makedirs(predictions_dir, exist_ok=True)
 
-    raw_table = f"{BQ_PROJECT}.{BQ_DATASET}.daily_{today}"
+    raw_table = f"{BQ_PROJECT}.{BQ_RAW_DATASET}.daily_{today}"
     pred_table = f"{BQ_PROJECT}.{BQ_PREDICT_DATASET}.daily_{today}"
 
     # 1️⃣ Lire depuis BigQuery
@@ -90,8 +94,9 @@ def run_daily_prediction():
         X_api_path_api = X_api_path
         output_api_path_api = output_api_path
 
+    pred_api_url = f"{API_URL}/predict"
     print(f"🤖 Sending data to /predict")
-    res_pred = requests.post(PREDICT_ENDPOINT, json={
+    res_pred = requests.post(pred_api_url, json={
         "input_path": X_api_path_api,           # 🟢 Chemin vers X_pred...
         "output_path": output_api_path_api      # 🟢 Chemin vers predictions...
     })

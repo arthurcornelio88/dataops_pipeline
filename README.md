@@ -35,6 +35,10 @@ This script installs:
 * and sets up the local environment
 
 ```bash
+export ENV="PROD"
+export REFERENCE_DATA_PATH="fraudTest.csv" # Change it according to your configuration
+export GCP_PROJECT="jedha2024" # Change it according to your configuration
+
 chmod +x setup_vm_airflow.sh
 ./setup_vm_airflow.sh
 ```
@@ -44,6 +48,7 @@ chmod +x setup_vm_airflow.sh
 ## 🌀 4. Launch Airflow
 
 ```bash
+
 souce .env
 source .env.airflow
 source .venv/bin/activate
