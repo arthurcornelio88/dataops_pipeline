@@ -11,7 +11,7 @@ if ! command -v uv &> /dev/null; then
 fi
 
 # 2. Activer uv dans le shell
-source ~/.local/share/uv/activate.sh
+export PATH="$HOME/.local/bin:$PATH"
 
 # 3. Initialiser l’environnement
 echo "📁 Initialisation de l'environnement virtuel uv..."
