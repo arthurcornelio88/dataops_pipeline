@@ -35,8 +35,3 @@ chmod +x setup_airflow.sh
 
 echo ""
 echo "✅ VM prête avec Airflow 2.8.4 🎉"
-echo "👉 Pour démarrer manuellement :"
-echo "   source .env.airflow"
-echo "   source .venv/bin/activate"
-echo "   airflow webserver --port 8080 &"
-echo "   airflow scheduler &"
