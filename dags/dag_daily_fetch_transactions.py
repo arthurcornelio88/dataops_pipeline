@@ -9,7 +9,7 @@ from outils import get_secret
 
 
 # ========= ENV MANAGEMENT ========= #
-BQ_PROJECT = os.getenv("BQ_PROJECT") or "your_project"
+BQ_PROJECT = get_secret("BQ_PROJECT") or "your_project"
 ENV = os.getenv("ENV", "DEV")
 
 if ENV == "PROD":

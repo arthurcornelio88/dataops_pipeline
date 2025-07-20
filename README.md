@@ -1,82 +1,100 @@
-uv init 
+# ⚙️ `dataops_pipeline` — Airflow Setup on GCP VM
 
-uv venv
-
-uv pip install "apache-airflow[google]==2.8.4" \
-  --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.8.4/constraints-3.11.txt"
-
-uv pip install "apache-airflow==3.0.2" apache-airflow-providers-google==10.1.1
-
-uv sync
-
-source .venv/bin/activate
+This repository runs the production orchestration for fraud detection using Apache Airflow.
+The setup is designed to run manually on a clean **Debian-based VM on Google Cloud Platform**.
 
 ---
 
-airflow setup
+## ✅ 1. System setup (one-time, on a fresh VM)
+
+Run the following commands after VM creation:
 
 ```bash
-sa
-chmod +x setup_airflow.sh && ./setup_airflow.sh
-```
-
-===
-
-# In production
-
-- evidently cloud : https://app.jedha.co/course/continuous-monitoring-lds/real-time-monitoring-lds
-
-🚨 ONE THING THAT YOU NEED TO MAKE SURE IS TO ADD THE ENVIRONMENT VARIABLE IN THE AIRFLOW VARIABLES (Admins > Variables) 🚨 You have EVIDENTLY_CLOUD_TOKEN & EVIDENTLY_CLOUD_PROJECT_ID.
-
-
-===
-
-Create VM (e2-medium)
-sudo apt-get update
-sudo apt-get install -y git
-sudo apt-get install -y python3-pip
-git clone https://gitlab.com/automatic_fraud_detection_b3/dataops_pipeline.git
-
-===
-
-curl -LsSf https://astral.sh/uv/install.sh | sh
-source $HOME/.local/bin/env
-
-cd dataops_pipeline
-
-uv init 
-
-uv venv
-
-AIRFLOW_VERSION=3.0.3
-
-# Extract the version of Python you have installed. If you're currently using a Python version that is not supported by Airflow, you may want to set this manually.
-# See above for supported versions.
-PYTHON_VERSION="$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-
-CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
-# For example this would install 3.0.0 with python 3.9: https://raw.githubusercontent.com/apache/airflow/constraints-3.0.3/constraints-3.9.txt
-
-uv pip install "apache-airflow==${AIRFLOW_VERSION}" --constraint "${CONSTRAINT_URL}"
-
-uv pip install --upgrade apache-airflow apache-airflow-providers-google
-
-uv sync
-
-source .venv/bin/activate
-
-==
-
-===
-
-# 1. Mise à jour et outils de base (une seule fois)
 sudo apt-get update -y
 sudo apt-get install -y git curl python3-pip
+```
 
-# 2. Cloner le projet
+---
+
+## 📦 2. Clone the project
+
+```bash
 git clone https://gitlab.com/automatic_fraud_detection_b3/dataops_pipeline.git
 cd dataops_pipeline
+```
 
-# 3. Lancer le script
+---
+
+## 🚀 3. Run the Airflow environment setup
+
+This script installs:
+
+* `uv` (dependency manager)
+* Apache Airflow `2.8.4`
+* Google provider `10.1.1`
+* and sets up the local environment
+
+```bash
 chmod +x setup_vm_airflow.sh
 ./setup_vm_airflow.sh
+```
+
+---
+
+## 🌀 4. Launch Airflow
+
+```bash
+souce .env
+source .env.airflow
+source .venv/bin/activate
+
+# Start the webserver and scheduler
+airflow webserver --port 8080 &
+airflow scheduler &
+```
+
+Airflow UI: `http://<YOUR_VM_PUBLIC_IP>:8080`
+
+> To kill process and restart Airflow : `pkill airflow & pkill guvicorn`, then, relaunch.
+---
+
+## 🌐 5. Get your IP & open port 8080 in GCP
+
+* From the VM:
+
+  ```bash
+  curl ifconfig.me
+  ```
+
+* In the GCP Console:
+  Go to **VPC > Firewall rules**, and create a rule:
+
+| Field            | Value                                 |
+| ---------------- | ------------------------------------- |
+| Name             | `allow-airflow-8080`                  |
+| Targets          | All instances in the network          |
+| Protocols/Ports  | TCP: `8080`                           |
+| Source IP Ranges | `0.0.0.0/0` *(or restrict as needed)* |
+
+---
+
+## 📂 6. DAGs to enable in the UI
+
+Once Airflow is running, enable the following DAGs:
+
+* `fetch_api_data` — fetches real-time payments every minute
+* `predict_payments` — runs fraud prediction batch jobs
+* `monitor_fraud` — monitors predictions and triggers alerts
+
+---
+
+## ⚠️ Requirements
+
+Make sure the following components are configured:
+
+* ✅ GCP **storage bucket**
+* ✅ GCP **BigQuery datasets** (`raw_api_data`, `predictions`)
+* ✅ GCP **service account key** (`GOOGLE_APPLICATION_CREDENTIALS`)
+* ✅ **Discord webhook** for alert notifications
+
+---

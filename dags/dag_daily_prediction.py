@@ -16,10 +16,10 @@ BQ_LOCATION = os.getenv("BQ_LOCATION") or "EU"
 
 if ENV == "PROD":
     PREDICT_ENDPOINT = get_secret("prod-api-url", BQ_PROJECT)
-    API_URL_DEV = get_secret("prod-api-url", BQ_PROJECT).replace("/predict", "")
+    API_URL = get_secret("prod-api-url", BQ_PROJECT).replace("/predict", "")
 else:
     PREDICT_ENDPOINT = os.getenv("PREDICT_URL_DEV")
-    API_URL_DEV = os.getenv("API_URL_DEV") or "http://localhost:8000"
+    API_URL = os.getenv("API_URL_DEV") or "http://localhost:8000"
 
 # ========= PREDICTION TASK ========= #
 def run_daily_prediction():
@@ -46,7 +46,7 @@ def run_daily_prediction():
     output_dir = get_storage_path("preprocessed", None)
     if output_dir.endswith("/"):
         output_dir = output_dir[:-1]
-    res = requests.post(f"{API_URL_DEV}/preprocess_direct", json={
+    res = requests.post(f"{API_URL}/preprocess_direct", json={
         "data": df.to_dict(orient="records"),
         "log_amt": True,
         "for_prediction": True,
