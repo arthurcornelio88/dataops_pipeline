@@ -1,16 +1,6 @@
 import os
 from google.cloud import secretmanager
 
-'''
-def get_storage_path(subdir: str, filename: str) -> str:
-    ENV = os.getenv("ENV", "DEV")
-    GCS_BUCKET = os.getenv("GCS_BUCKET", "fraud-detection-jedha2024")
-    if ENV == "PROD":
-        return f"gs://{GCS_BUCKET}/{subdir}/{filename}"
-    else:
-        return f"/app/{subdir}/{filename}"
-'''  
-
 def get_storage_path(subdir: str, filename: str) -> str:
     """
     Returns the environment-aware storage path for a given subdir and filename.
@@ -18,13 +8,14 @@ def get_storage_path(subdir: str, filename: str) -> str:
     PROD: Google Cloud Storage bucket path
     """
     ENV = os.getenv("ENV", "DEV")
-    GCS_BUCKET = os.getenv("GCS_BUCKET", "your-bucket")
+    PROJECT = os.getenv("PROJECT")
+    GCS_BUCKET = get_secret("gcp-bucket", PROJECT) if ENV == "PROD" else os.getenv("GCS_BUCKET")
     if ENV == "PROD":
         # Use GCS path
         if subdir:
-            return f"gs://{GCS_BUCKET}/{subdir}/{filename}" if filename else f"gs://{GCS_BUCKET}/{subdir}/"
+            return f"gs://{GCS_BUCKET}/shared_data/{subdir}/{filename}" if filename else f"gs://{GCS_BUCKET}/{subdir}/"
         else:
-            return f"gs://{GCS_BUCKET}/{filename}" if filename else f"gs://{GCS_BUCKET}/"
+            return f"gs://{GCS_BUCKET}/shared_data/{filename}" if filename else f"gs://{GCS_BUCKET}/shared_data/"
     else:
         # Use local path (project-level shared_data)
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../shared_data'))
@@ -46,4 +37,4 @@ def get_secret(secret_id, project_id):
     client = secretmanager.SecretManagerServiceClient()
     name = f"projects/{project_id}/secrets/{secret_id}/versions/latest"
     response = client.access_secret_version(request={"name": name})
-    return response.payload.data.decode("UTF-8")
+    return response.payload.data.decode("UTF-8").strip()

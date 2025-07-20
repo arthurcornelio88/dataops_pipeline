@@ -10,18 +10,18 @@ from outils import get_secret
 
 # ========= ENV MANAGEMENT ========= #
 ENV = os.getenv("ENV") # Define it in .env.airflow
-PROJECT = os.getenv("GCP_PROJECT") # Define it in .env.airflow
+PROJECT = os.getenv("PROJECT") # Define it in .env.airflow
 
 if ENV == "PROD":
     # Fetch endpoint from Google Secret Manager
     BQ_PROJECT = PROJECT
-    API_URL = get_secret("prod-api-url", PROJECT).strip()
+    API_URL = get_secret("prod-mock-url", PROJECT)
     BQ_RAW_DATASET = get_secret("bq-raw-dataset", PROJECT)
     BQ_LOCATION = get_secret("bq-location", PROJECT)
     RESET_BQ = get_secret("reset-bq-before-write", PROJECT)
     FETCH_VARIABILITY = get_secret("fetch-variability", PROJECT)
 else:
-    API_URL = os.getenv("API_URL_DEV").strip()
+    API_URL = os.getenv("API_URL_DEV")
     BQ_PROJECT = os.getenv("BQ_PROJECT")
     BQ_RAW_DATASET = os.getenv("BQ_RAW_DATASET")
     BQ_LOCATION = os.getenv("BQ_LOCATION")
@@ -44,7 +44,7 @@ def fetch_transactions_to_bq():
         raise ValueError(f"❌ No endpoint defined for ENV: {ENV}")
 
     n = 500
-    full_url = f"{url}?n={n}&variability={FETCH_VARIABILITY}"
+    full_url = f"{url}/transactions?n={n}&variability={FETCH_VARIABILITY}"
     print(f"🌐 Fetching from: {full_url}")
 
     response = requests.get(full_url)

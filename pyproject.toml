@@ -14,4 +14,5 @@ dependencies = [
   "google-cloud-bigquery==3.21.0",
   "python-dotenv==1.0.1",
   "evidently>=0.4.36",
+  "gcsfs>=2025.5.1",
 ]

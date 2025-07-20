@@ -111,7 +111,7 @@ def run_daily_prediction():
     else:
         # In PROD, ensure predictions file exists in GCS before uploading to BQ
         from google.cloud import storage
-        bucket_name = os.getenv("GCS_BUCKET") or os.getenv("GCP_BUCKET", "fraud-detection-jedha2024")
+        bucket_name = get_secret("gcp-bucket", PROJECT)
         storage_client = storage.Client()
         blob_path = output_local_path.replace(f"gs://{bucket_name}/", "")
         temp_path = f"/tmp/predictions_{today}.csv"
