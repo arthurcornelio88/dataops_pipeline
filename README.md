@@ -1,10 +1,14 @@
+souce .env
+airflow webserver --port 8080 &
+airflow scheduler &
+
 # ⚙️ `dataops_pipeline` — Airflow Setup on GCP VM
 
-This repository runs the production orchestration for fraud detection using Apache Airflow.
-The setup is designed to run manually on a clean **Debian-based VM on Google Cloud Platform**.
+This repository contains the production orchestration for fraud detection using Apache Airflow. The setup is designed to be run manually on a clean **Debian-based VM on Google Cloud Platform**.
 
+---
 
-## ✅ Étape 1 – Créer le service account
+## ✅ Step 1 – Create the Service Account
 
 ```bash
 gcloud iam service-accounts create fraud-b3 \
@@ -14,7 +18,7 @@ gcloud iam service-accounts create fraud-b3 \
 
 ---
 
-## ✅ Étape 2 – Lui attribuer les bons rôles IAM
+## ✅ Step 2 – Assign the Required IAM Roles
 
 ```bash
 PROJECT_ID=$(gcloud config get-value project)
@@ -41,7 +45,7 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 
 ---
 
-## ✅ Étape 3 – Créer une VM avec ce service account
+## ✅ Step 3 – Create a VM with the Service Account
 
 ```bash
 gcloud compute instances create airflow-prod-b3 \
@@ -58,20 +62,20 @@ gcloud compute instances create airflow-prod-b3 \
 
 ---
 
-## 📌 Résultat
+## 📌 Result
 
-* Service account : `fraud-b3@<project>.iam.gserviceaccount.com`
-* Accès :
+- **Service account**: `fraud-b3@<project>.iam.gserviceaccount.com`
+- **Access:**
+  - ✅ BigQuery read/write
+  - ✅ GCS full access
+  - ✅ Secret Manager access
+- VM is ready to receive your `setup_vm_airflow.sh`
 
-  * ✅ BigQuery read/write
-  * ✅ GCS full access
-  * ✅ Secret Manager access
-* VM propre, prête à recevoir ton `setup_vm_airflow.sh`
+---
 
+## ✅ 1. System Setup (One-Time, on a Fresh VM)
 
-## ✅ 1. System setup (one-time, on a fresh VM)
-
-Run the following commands after VM creation:
+After creating the VM, run:
 
 ```bash
 sudo apt-get update -y
@@ -80,7 +84,7 @@ sudo apt-get install -y git curl python3-pip
 
 ---
 
-## 📦 2. Clone the project
+## 📦 2. Clone the Project
 
 ```bash
 git clone https://gitlab.com/automatic_fraud_detection_b3/dataops_pipeline.git
@@ -89,19 +93,18 @@ cd dataops_pipeline
 
 ---
 
-## 🚀 3. Run the Airflow environment setup
+## 🚀 3. Run the Airflow Environment Setup
 
 This script installs:
-
-* `uv` (dependency manager)
-* Apache Airflow `2.8.4`
-* Google provider `10.1.1`
-* and sets up the local environment
+- `uv` (dependency manager)
+- Apache Airflow `2.8.4`
+- Google provider `10.1.1`
+- Sets up the local environment
 
 ```bash
 export ENV="PROD"
 export REFERENCE_DATA_PATH="fraudTest.csv"
-export GCP_PROJECT="jedha2024"
+export PROJECT="jedha2024"
 
 chmod +x setup_vm_airflow.sh
 ./setup_vm_airflow.sh
@@ -112,10 +115,8 @@ chmod +x setup_vm_airflow.sh
 ## 🌀 4. Launch Airflow
 
 ```bash
-
-souce .env
-source .env.airflow
 source .venv/bin/activate
+source .env.airflow
 
 # Start the webserver and scheduler
 airflow webserver --port 8080 &
@@ -124,46 +125,47 @@ airflow scheduler &
 
 Airflow UI: `http://<YOUR_VM_PUBLIC_IP>:8080`
 
-> To kill process and restart Airflow : `pkill airflow & pkill guvicorn`, then, relaunch.
+> To kill and restart Airflow: `pkill airflow && pkill gunicorn`, then relaunch.
+
 ---
 
-## 🌐 5. Get your IP & open port 8080 in GCP
+## 🌐 5. Get Your IP & Open Port 8080 in GCP
 
-* From the VM:
+- **From the VM:**
 
   ```bash
   curl ifconfig.me
   ```
 
-* In the GCP Console:
+- **In the GCP Console:**
   Go to **VPC > Firewall rules**, and create a rule:
 
-| Field            | Value                                 |
-| ---------------- | ------------------------------------- |
-| Name             | `allow-airflow-8080`                  |
-| Targets          | All instances in the network          |
-| Protocols/Ports  | TCP: `8080`                           |
-| Source IP Ranges | `0.0.0.0/0` *(or restrict as needed)* |
+  | Field            | Value                                 |
+  | ---------------- | ------------------------------------- |
+  | Name             | `allow-airflow-8080`                  |
+  | Targets          | All instances in the network          |
+  | Protocols/Ports  | TCP: `8080`                           |
+  | Source IP Ranges | `0.0.0.0/0` *(or restrict as needed)* |
 
 ---
 
-## 📂 6. DAGs to enable in the UI
+## 📂 6. Enable DAGs in the Airflow UI
 
 Once Airflow is running, enable the following DAGs:
 
-* `fetch_api_data` — fetches real-time payments every minute
-* `predict_payments` — runs fraud prediction batch jobs
-* `monitor_fraud` — monitors predictions and triggers alerts
+- `fetch_api_data` — fetches real-time payments every minute
+- `predict_payments` — runs fraud prediction batch jobs
+- `monitor_fraud` — monitors predictions and triggers alerts
 
 ---
 
 ## ⚠️ Requirements
 
-Make sure the following components are configured:
+Ensure the following components are configured:
 
-* ✅ GCP **storage bucket**
-* ✅ GCP **BigQuery datasets** (`raw_api_data`, `predictions`)
-* ✅ GCP **service account key** (`GOOGLE_APPLICATION_CREDENTIALS`)
-* ✅ **Discord webhook** for alert notifications
+- ✅ GCP **storage bucket**
+- ✅ GCP **BigQuery datasets** (`raw_api_data`, `predictions`)
+- ✅ GCP **service account key** (`GOOGLE_APPLICATION_CREDENTIALS`)
+- ✅ **Discord webhook** for alert notifications
 
 ---

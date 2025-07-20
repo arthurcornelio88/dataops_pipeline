@@ -15,13 +15,13 @@ PROJECT = os.getenv("GCP_PROJECT") # Define it in .env.airflow
 if ENV == "PROD":
     # Fetch endpoint from Google Secret Manager
     BQ_PROJECT = PROJECT
-    API_URL = get_secret("prod-api-url", PROJECT)
+    API_URL = get_secret("prod-api-url", PROJECT).strip()
     BQ_RAW_DATASET = get_secret("bq-raw-dataset", PROJECT)
     BQ_LOCATION = get_secret("bq-location", PROJECT)
     RESET_BQ = get_secret("reset-bq-before-write", PROJECT)
     FETCH_VARIABILITY = get_secret("fetch-variability", PROJECT)
 else:
-    API_URL = os.getenv("API_URL_DEV")
+    API_URL = os.getenv("API_URL_DEV").strip()
     BQ_PROJECT = os.getenv("BQ_PROJECT")
     BQ_RAW_DATASET = os.getenv("BQ_RAW_DATASET")
     BQ_LOCATION = os.getenv("BQ_LOCATION")
