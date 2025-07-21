@@ -1,5 +1,8 @@
 import os
 from google.cloud import secretmanager
+import gcsfs
+import pandas as pd
+import time
 
 def get_storage_path(subdir: str, filename: str) -> str:
     """
@@ -38,3 +41,73 @@ def get_secret(secret_id, project_id):
     name = f"projects/{project_id}/secrets/{secret_id}/versions/latest"
     response = client.access_secret_version(request={"name": name})
     return response.payload.data.decode("UTF-8").strip()
+
+def write_csv(df, path):
+    if path.startswith("gs://"):
+        print(f"📝 Saving to GCS: {path}")
+        fs = gcsfs.GCSFileSystem(skip_instance_cache=True, cache_timeout=0)
+
+        with fs.open(path, 'w') as f:
+            df.to_csv(f, index=False)
+            f.flush()
+        fs.invalidate_cache(path)
+        # Validation immédiate
+        if not fs.exists(path):
+            raise RuntimeError(f"❌ GCS file not found right after saving: {path}")
+        print(f"✅ File written and verified on GCS: {path}")
+    else:
+        print(f"📝 Saving locally: {path}")
+        df.to_csv(path, index=False)
+
+
+def read_gcs_csv(path: str) -> pd.DataFrame:
+    """
+    Lit un fichier CSV, que ce soit en local ou sur GCS (gs://...).
+    
+    Args:
+        path (str): Le chemin vers le fichier CSV.
+    
+    Returns:
+        pd.DataFrame: Le DataFrame chargé.
+    
+    Raises:
+        FileNotFoundError: Si le fichier est introuvable.
+    """
+    if path.startswith("gs://"):
+        fs = gcsfs.GCSFileSystem(skip_instance_cache=True, cache_timeout=0)
+
+        if not fs.exists(path):
+            raise FileNotFoundError(f"⛔ Fichier introuvable sur GCS: {path}")
+        with fs.open(path, "r") as f:
+            return pd.read_csv(f)
+    else:
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"⛔ Fichier local introuvable: {path}")
+        return pd.read_csv(path)
+
+def file_exists(path):
+    if path.startswith("gs://"):
+        fs = gcsfs.GCSFileSystem(skip_instance_cache=True, cache_timeout=0)
+
+        return fs.exists(path)
+    else:
+        return os.path.exists(path)
+
+def wait_for_gcs(path, timeout=30):
+    """
+    Attends que le fichier GCS soit visible (avec un timeout en secondes)
+    """
+    if not path.startswith("gs://"):
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"❌ Local file not found: {path}")
+        return
+
+    fs = gcsfs.GCSFileSystem(skip_instance_cache=True, cache_timeout=0)
+    for i in range(timeout):
+        if fs.exists(path):
+            print(f"✅ GCS file detected: {path}")
+            return
+        print(f"⏳ Waiting for GCS propagation ({i+1}/{timeout}): {path}")
+        time.sleep(1)
+
+    raise FileNotFoundError(f"⛔ File not found in GCS after {timeout}s: {path}")
