@@ -252,7 +252,8 @@ def retrain_model_step(**context):
         train_endpoint = urljoin(API_URL, "/train")
         finetune_res = requests.post(train_endpoint, json={
             "timestamp": fresh_timestamp,  # Utiliser les données fraîches
-            "fast": True,
+            "timestamp_model_finetune": "latest",
+            "fast": False,
             "test": False,
             "model_name": "catboost_model.cbm",
             "mode": "fine_tune",
