@@ -84,8 +84,8 @@ def run_drift_monitoring():
     print(f"🔗 API_URL resolved: {API_URL}")
     monitor_endpoint = urljoin(API_URL,"/monitor")
     res = requests.post(monitor_endpoint, json={
-        "reference_path": ref_filtered_name,
-        "current_path": curr_filename,
+        "reference_path": ref_filtered_path,
+        "current_path": curr_path,
         "output_html": output_html_name
     })
 
