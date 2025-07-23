@@ -6,10 +6,13 @@ from outils import get_storage_path, get_secret
 import requests
 from google.cloud import bigquery
 import pandas as pd
+from urllib.parse import urljoin 
 
 # ========= ENV & CONFIG ========= #
 ENV = os.getenv("ENV") # Define it in .env.airflow
 PROJECT = os.getenv("PROJECT") # Define it in .env.airflow 
+
+print(f"🌍 Running in ENV: {ENV} | PROJECT: {PROJECT}")
 
 if ENV == "PROD":
     API_URL = get_secret("prod-api-url", PROJECT)
@@ -78,7 +81,8 @@ def run_drift_monitoring():
     df_curr.to_csv(curr_path, index=False)
 
     # === API call to /monitor
-    monitor_endpoint = os.path.join(API_URL,"/monitor")
+    print(f"🔗 API_URL resolved: {API_URL}")
+    monitor_endpoint = urljoin(API_URL,"/monitor")
     res = requests.post(monitor_endpoint, json={
         "reference_path": ref_filtered_name,
         "current_path": curr_filename,
@@ -132,7 +136,7 @@ def run_validation_step(**context):
     
     # === Appel API pour validation production
     print(f"🎯 Validation via API avec {len(df_validation)} échantillons")
-    validate_endpoint = os.path.join(API_URL, "/validate")
+    validate_endpoint = urljoin(API_URL, "/validate")
     res = requests.post(validate_endpoint, json={
         "model_name": "catboost_model.cbm",
         "validation_mode": "production",
@@ -227,7 +231,7 @@ def retrain_model_step(**context):
         
         # 🔄 2. Preprocesser ces nouvelles données avec /preprocess_direct
         print("🔄 Preprocessing fresh data with /preprocess_direct...")
-        preprocess_endpoint = os.path.join(API_URL, "/preprocess_direct")
+        preprocess_endpoint = urljoin(API_URL, "/preprocess_direct")
         preprocess_res = requests.post(preprocess_endpoint, json={
             "data": df_fresh.to_dict(orient="records"),
             "log_amt": True,
@@ -245,7 +249,7 @@ def retrain_model_step(**context):
         # 🧠 3. Fine-tuning avec les données préprocessées
         print("🧠 Starting fine-tuning with preprocessed data...")
         
-        train_endpoint = os.path.join(API_URL, "/train")
+        train_endpoint = urljoin(API_URL, "/train")
         finetune_res = requests.post(train_endpoint, json={
             "timestamp": fresh_timestamp,  # Utiliser les données fraîches
             "fast": True,

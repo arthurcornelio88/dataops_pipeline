@@ -1,7 +1,3 @@
-souce .env
-airflow webserver --port 8080 &
-airflow scheduler &
-
 # ⚙️ `dataops_pipeline` — Airflow Setup on GCP VM
 
 This repository contains the production orchestration for fraud detection using Apache Airflow. The setup is designed to be run manually on a clean **Debian-based VM on Google Cloud Platform**.
@@ -156,6 +152,8 @@ Once Airflow is running, enable the following DAGs:
 - `fetch_api_data` — fetches real-time payments every minute
 - `predict_payments` — runs fraud prediction batch jobs
 - `monitor_fraud` — monitors predictions and triggers alerts
+
+For a detailed explanation of each DAG and its role in the workflow, see [docs/dags](docs/dags.md).
 
 ---
 
