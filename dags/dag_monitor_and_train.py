@@ -168,9 +168,13 @@ def run_validation_step(**context):
             context['ti'].xcom_push(key="validation_samples", value=len(df_validation))
             return
 
-    # === Clean floats to prevent JSON errors
-    def clean_json_floats(values):
-        return [float(x) if pd.notna(x) and np.isfinite(x) else 0.0 for x in values]
+    # 🧹 Nettoyage ultime pour JSON-safe (force float, retire NaN et Inf)
+    for col in ['true_label', 'fraud_score', 'is_fraud_pred']:
+        df_validation[col] = (
+            pd.to_numeric(df_validation[col], errors='coerce')  # force float
+            .replace([np.inf, -np.inf], np.nan)                # remove Inf
+            .fillna(0.0)                                       # fill NaN
+        )
 
     # === Appel API
     print(f"🎯 Validation via API avec {len(df_validation)} échantillons")
@@ -179,11 +183,12 @@ def run_validation_step(**context):
         "model_name": "catboost_model.cbm",
         "validation_mode": "production",
         "production_data": {
-            "y_true": clean_json_floats(df_validation['true_label']),
-            "y_pred_proba": clean_json_floats(df_validation['fraud_score']),
-            "y_pred_binary": clean_json_floats(df_validation['is_fraud_pred'])
+            "y_true": df_validation['true_label'].tolist(),
+            "y_pred_proba": df_validation['fraud_score'].tolist(),
+            "y_pred_binary": df_validation['is_fraud_pred'].tolist()
         }
     })
+
 
     if res.status_code != 200:
         raise Exception(f"❌ Validation failed: {res.status_code} - {res.text}")
