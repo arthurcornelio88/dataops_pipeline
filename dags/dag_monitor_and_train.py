@@ -175,7 +175,7 @@ def run_validation_step(**context):
             .replace([np.inf, -np.inf], np.nan)                # remove Inf
             .fillna(0.0)                                       # fill NaN
         )
-        
+
     # 🧪 DEBUG : Sanity check après nettoyage
     print("🔎 df_validation info:")
     print(df_validation[['true_label', 'fraud_score', 'is_fraud_pred']].info())
@@ -278,7 +278,7 @@ def retrain_model_step(**context):
             fraud_count = df_fresh["is_fraud"].sum()
             print(f"📊 Fraud ratio in fresh data: {fraud_count} / {len(df_fresh)}")
 
-            if fraud_count < 1:
+            if fraud_count < 4:
                 print("⚠️ No frauds in fresh data — trying to fetch historical frauds")
 
                 df_extra = fetch_historical_frauds(
