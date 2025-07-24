@@ -175,6 +175,31 @@ def run_validation_step(**context):
             .replace([np.inf, -np.inf], np.nan)                # remove Inf
             .fillna(0.0)                                       # fill NaN
         )
+        
+    # 🧪 DEBUG : Sanity check après nettoyage
+    print("🔎 df_validation info:")
+    print(df_validation[['true_label', 'fraud_score', 'is_fraud_pred']].info())
+
+    print("\n📊 Statistiques des colonnes :")
+    print(df_validation[['true_label', 'fraud_score', 'is_fraud_pred']].describe())
+
+    print("\n🔍 NaN count :")
+    print(df_validation[['true_label', 'fraud_score', 'is_fraud_pred']].isna().sum())
+
+    print("\n🔍 Inf count :")
+    print({
+        col: np.isinf(df_validation[col]).sum()
+        for col in ['fraud_score', 'is_fraud_pred']
+    })
+
+    print("\n🔍 Types détectés dans les colonnes :")
+    print({
+        col: df_validation[col].map(type).value_counts().to_dict()
+        for col in ['true_label', 'fraud_score', 'is_fraud_pred']
+    })
+
+    print("\n🔍 Exemple de valeurs (premières lignes):")
+    print(df_validation[['true_label', 'fraud_score', 'is_fraud_pred']].head(5).to_dict(orient='records'))
 
     # === Appel API
     print(f"🎯 Validation via API avec {len(df_validation)} échantillons")
