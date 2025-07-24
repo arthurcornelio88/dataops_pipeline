@@ -347,6 +347,11 @@ def retrain_model_step(**context):
             raise Exception(f"❌ Fine-tuning failed: {finetune_res.status_code} - {finetune_res.text}")
 
         result = finetune_res.json()
+
+        print("🛬 API response from /train:")
+        import json
+        print(json.dumps(result, indent=2))
+        
         if "model_path" not in result:
             raise Exception("❌ CRITICAL: model_path missing from API response")
 
