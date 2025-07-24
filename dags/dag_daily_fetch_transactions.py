@@ -10,7 +10,7 @@ from outils import get_secret
 
 # ========= ENV MANAGEMENT ========= #
 ENV = os.getenv("ENV") # Define it in .env.airflow
-PROJECT = os.getenv("PROJECT") # Define it in .env.airflow
+PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT") # Define it in .env.airflow
 
 if ENV == "PROD":
     # Fetch endpoint from Google Secret Manager

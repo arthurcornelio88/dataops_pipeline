@@ -34,6 +34,10 @@ Use [`docs/bigquery_setup.md`](docs/bigquery_setup.md) and [`docs/airflow_setup.
 Then, run:
 
 ```bash
+export ENV="PROD" 
+export GOOGLE_CLOUD_PROJECT="jedha2024"
+export REFERENCE_PATH="fraudTest.csv"
+
 chmod +x setup_vm_airflow.sh
 ./setup_vm_airflow.sh
 ```

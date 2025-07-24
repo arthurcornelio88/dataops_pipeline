@@ -10,7 +10,7 @@ from urllib.parse import urljoin
 
 # ========= ENV & CONFIG ========= #
 ENV = os.getenv("ENV") # Define it in .env.airflow
-PROJECT = os.getenv("PROJECT") # Define it in .env.airflow 
+PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT") # Define it in .env.airflow 
 
 print(f"🌍 Running in ENV: {ENV} | PROJECT: {PROJECT}")
 
