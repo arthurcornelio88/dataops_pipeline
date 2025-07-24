@@ -204,7 +204,42 @@ def retrain_model_step(**context):
 
         if df_fresh.empty:
             raise Exception(f"❌ CRITICAL: No fresh data found in BigQuery table {raw_table}! Pipeline cannot continue without data.")
+        
+        if "is_fraud" in df_fresh.columns:
+            fraud_count = df_fresh["is_fraud"].sum()
+            print(f"📊 Fraud ratio in fresh data: {fraud_count} frauds / {len(df_fresh)} samples")
             
+            if fraud_count < 1:
+                print("⚠️ No frauds in recent data — fetching frauds from previous daily tables")
+                from datetime import timedelta
+
+                bq = bigquery.Client()
+                historical_frauds = []
+
+                for i in range(1, 8):  # Parcours les 7 jours précédents
+                    day = (datetime.utcnow() - timedelta(days=i)).strftime("%Y%m%d")
+                    table_id = f"{BQ_PROJECT}.{BQ_RAW_DATASET}.daily_{day}"
+                    print(f"🔎 Checking table: {table_id}")
+                    try:
+                        query = f"SELECT * FROM `{table_id}` WHERE is_fraud = 1 LIMIT 5"
+                        df_past = bq.query(query).to_dataframe()
+                        if not df_past.empty:
+                            print(f"✅ Found {len(df_past)} frauds in {table_id}")
+                            historical_frauds.append(df_past)
+                        if sum(len(df) for df in historical_frauds) >= 10:
+                            break  # Stop dès qu'on a 10 fraudes
+                    except Exception as e:
+                        print(f"⚠️ Could not access {table_id}: {e}")
+
+                if historical_frauds:
+                    df_extra_frauds = pd.concat(historical_frauds, ignore_index=True)
+                    common_cols = df_fresh.columns.intersection(df_extra_frauds.columns)
+                    df_extra_frauds = df_extra_frauds[common_cols]
+                    df_fresh = pd.concat([df_fresh, df_extra_frauds], ignore_index=True)
+                    print(f"🔁 Final dataset size after enrichment: {df_fresh.shape}")
+                else:
+                    print("🚨 No historical frauds found — continuing with fraud-free data (⚠️ risky)")
+                
         print(f"✅ Fetched {len(df_fresh)} fresh samples from BigQuery")
         
         # 🧹 NETTOYER LES COLONNES BIGQUERY AVANT PREPROCESSING
