@@ -11,7 +11,7 @@ def get_storage_path(subdir: str, filename: str) -> str:
     PROD: Google Cloud Storage bucket path
     """
     ENV = os.getenv("ENV", "DEV")
-    PROJECT = os.getenv("PROJECT")
+    PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")
     GCS_BUCKET = get_secret("gcp-bucket", PROJECT) if ENV == "PROD" else os.getenv("GCS_BUCKET")
     if ENV == "PROD":
         # Use GCS path
