@@ -3,6 +3,9 @@ from google.cloud import secretmanager
 import gcsfs
 import pandas as pd
 import time
+from google.cloud import bigquery
+import pandas as pd
+from datetime import datetime, timedelta
 
 def get_storage_path(subdir: str, filename: str) -> str:
     """
@@ -111,3 +114,54 @@ def wait_for_gcs(path, timeout=30):
         time.sleep(1)
 
     raise FileNotFoundError(f"⛔ File not found in GCS after {timeout}s: {path}")
+
+def fetch_historical_frauds(
+    bq_client: bigquery.Client,
+    bq_project: str,
+    dataset: str,
+    days_back: int = 7,
+    min_frauds: int = 10,
+    verbose: bool = True
+) -> pd.DataFrame:
+    """
+    Fetches fraud samples from the past N days from BigQuery.
+
+    Args:
+        bq_client: Initialized BigQuery client
+        bq_project: Project ID
+        dataset: Dataset name (e.g. 'raw_data')
+        days_back: Number of past days to search
+        min_frauds: Stop once this number of frauds is collected
+        verbose: Whether to print progress logs
+
+    Returns:
+        A DataFrame of fraud samples (may be empty)
+    """
+    frauds = []
+
+    for i in range(1, days_back + 1):
+        day = (datetime.utcnow() - timedelta(days=i)).strftime("%Y%m%d")
+        table_id = f"{bq_project}.{dataset}.daily_{day}"
+
+        try:
+            query = f"SELECT * FROM `{table_id}` WHERE is_fraud = 1 LIMIT 5"
+            df = bq_client.query(query).to_dataframe()
+
+            if not df.empty:
+                frauds.append(df)
+                if verbose:
+                    print(f"✅ Found {len(df)} frauds in {table_id}")
+
+            if sum(len(d) for d in frauds) >= min_frauds:
+                break
+
+        except Exception as e:
+            if verbose:
+                print(f"⚠️ Skipped {table_id}: {e}")
+
+    if frauds:
+        return pd.concat(frauds, ignore_index=True)
+    else:
+        if verbose:
+            print("🚫 No historical frauds found")
+        return pd.DataFrame()
