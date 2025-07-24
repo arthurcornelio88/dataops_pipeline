@@ -55,9 +55,9 @@ pkill -f "airflow scheduler"
 pkill -f gunicorn
 rm airflow-webserver.pid
 
-export ENV="PROD" 
-export GOOGLE_CLOUD_PROJECT="jedha2024"
-export REFERENCE_PATH="fraudTest.csv"
+export ENV=PROD
+export GOOGLE_CLOUD_PROJECT=jedha2024
+export REFERENCE_PATH=fraudTest.csv
 
 source .env.airflow
 airflow scheduler &
