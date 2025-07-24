@@ -351,7 +351,7 @@ def retrain_model_step(**context):
         print("🛬 API response from /train:")
         import json
         print(json.dumps(result, indent=2))
-        
+
         if "model_path" not in result:
             raise Exception("❌ CRITICAL: model_path missing from API response")
 
@@ -369,161 +369,6 @@ def retrain_model_step(**context):
     except Exception as e:
         print(f"❌ Fine-tuning pipeline failed: {e}")
         raise e
-
-
-# def retrain_model_step(**context):
-#     """🧠 FINE-TUNING avec nouvelles données BigQuery → Preprocessing → Fine-tuning"""
-#     timestamp_date = context['ti'].xcom_pull(task_ids="monitor_drift_report", key="timestamp")
-    
-#     from datetime import datetime
-#     current_time = datetime.now().strftime("%H%M%S")
-#     timestamp_full = f"{timestamp_date}_{current_time}"
-
-#     print(f"🧠 Starting FINE-TUNING pipeline with BigQuery data for {timestamp_full}")
-    
-#     try:
-#         # 📥 1. Récupérer les nouvelles données depuis BigQuery
-#         today = datetime.utcnow().strftime("%Y%m%d")
-#         raw_table = f"{BQ_PROJECT}.{BQ_RAW_DATASET}.daily_{today}"
-#         print(f"📥 Fetching fresh data from BigQuery table: {raw_table}")
-#         bq = bigquery.Client()
-#         df_fresh = bq.query(f"SELECT * FROM `{raw_table}` ORDER BY cc_num DESC LIMIT 1000").to_dataframe()  # Fetch the last 1000 records
-
-#         if df_fresh.empty:
-#             raise Exception(f"❌ CRITICAL: No fresh data found in BigQuery table {raw_table}! Pipeline cannot continue without data.")
-        
-#         if "is_fraud" in df_fresh.columns:
-#             fraud_count = df_fresh["is_fraud"].sum()
-#             print(f"📊 Fraud ratio in fresh data: {fraud_count} frauds / {len(df_fresh)} samples")
-            
-#             if fraud_count < 1:
-#                 print("⚠️ No frauds in recent data — fetching frauds from previous daily tables")
-#                 from datetime import timedelta
-
-#                 bq = bigquery.Client()
-#                 historical_frauds = []
-
-#                 for i in range(1, 8):  # Parcours les 7 jours précédents
-#                     day = (datetime.utcnow() - timedelta(days=i)).strftime("%Y%m%d")
-#                     table_id = f"{BQ_PROJECT}.{BQ_RAW_DATASET}.daily_{day}"
-#                     print(f"🔎 Checking table: {table_id}")
-#                     try:
-#                         query = f"SELECT * FROM `{table_id}` WHERE is_fraud = 1 LIMIT 5"
-#                         df_past = bq.query(query).to_dataframe()
-#                         if not df_past.empty:
-#                             print(f"✅ Found {len(df_past)} frauds in {table_id}")
-#                             historical_frauds.append(df_past)
-#                         if sum(len(df) for df in historical_frauds) >= 10:
-#                             break  # Stop dès qu'on a 10 fraudes
-#                     except Exception as e:
-#                         print(f"⚠️ Could not access {table_id}: {e}")
-
-#                 if historical_frauds:
-#                     df_extra_frauds = pd.concat(historical_frauds, ignore_index=True)
-#                     common_cols = df_fresh.columns.intersection(df_extra_frauds.columns)
-#                     df_extra_frauds = df_extra_frauds[common_cols]
-#                     df_fresh = pd.concat([df_fresh, df_extra_frauds], ignore_index=True)
-#                     print(f"🔁 Final dataset size after enrichment: {df_fresh.shape}")
-#                 else:
-#                     print("🚨 No historical frauds found — continuing with fraud-free data (⚠️ risky)")
-                
-#         print(f"✅ Fetched {len(df_fresh)} fresh samples from BigQuery")
-        
-#         # 🧹 NETTOYER LES COLONNES BIGQUERY AVANT PREPROCESSING
-#         print("🧹 Cleaning BigQuery timestamp columns...")
-        
-#         # Supprimer les colonnes timestamp automatiques de BigQuery
-#         bigquery_cols_to_drop = ["ingestion_ts", "created_at", "updated_at", "_ingestion_time"]
-#         cols_to_drop = [col for col in bigquery_cols_to_drop if col in df_fresh.columns]
-        
-#         if cols_to_drop:
-#             print(f"🧹 Removing BigQuery timestamp columns: {cols_to_drop}")
-#             df_fresh = df_fresh.drop(columns=cols_to_drop)
-        
-#         print(f"📊 Cleaned data shape: {df_fresh.shape}")
-#         print(f"🔍 Remaining columns: {list(df_fresh.columns)}")
-        
-#         # Vérifier la distribution des classes avant preprocessing
-#         if "is_fraud" in df_fresh.columns:
-#             fraud_ratio = df_fresh["is_fraud"].mean()
-#             print(f"📊 Fraud ratio in fresh data: {fraud_ratio:.4f} ({df_fresh['is_fraud'].sum()} frauds out of {len(df_fresh)})")
-            
-#             if fraud_ratio == 0.0:
-#                 print("⚠️ No fraud cases in fresh data, fine-tuning may not be effective...")
-        
-#         # 🔄 2. Preprocesser ces nouvelles données avec /preprocess_direct
-#         print("🔄 Preprocessing fresh data with /preprocess_direct...")
-#         preprocess_endpoint = urljoin(API_URL, "/preprocess_direct")
-#         preprocess_res = requests.post(preprocess_endpoint, json={
-#             "data": df_fresh.to_dict(orient="records"),
-#             "log_amt": True,
-#             "for_prediction": False,  # Pour training, pas prediction
-#             "output_dir": "/app/shared_data"
-#         }, timeout=300)
-        
-#         if preprocess_res.status_code != 200:
-#             raise Exception(f"❌ Preprocessing failed: {preprocess_res.status_code} - {preprocess_res.text}")
-        
-#         preprocess_result = preprocess_res.json()
-#         fresh_timestamp = preprocess_result.get("timestamp")
-#         print(f"✅ Preprocessing completed with timestamp: {fresh_timestamp}")
-        
-#         # 🧠 3. Fine-tuning avec les données préprocessées
-#         print("🧠 Starting fine-tuning with preprocessed data...")
-        
-#         train_endpoint = urljoin(API_URL, "/train")
-#         finetune_res = requests.post(train_endpoint, json={
-#             "timestamp": fresh_timestamp,  # Utiliser les données fraîches
-#             "timestamp_model_finetune": "latest",
-#             "fast": False,
-#             "test": False,
-#             "model_name": "catboost_model.cbm",
-#             "mode": "fine_tune",
-#             "learning_rate": 0.01,
-#             "epochs": 10
-#         }, timeout=600)  # 10 minutes pour le fine-tuning
-        
-#         if finetune_res.status_code != 200:
-#             raise Exception(f"❌ Fine-tuning failed: {finetune_res.status_code} - {finetune_res.text}")
-        
-#         # Traitement de la réponse du fine-tuning
-#         result = finetune_res.json()
-#         print(f"✅ Fine-tuning API response: {result}")
-#         print(f"🔍 DEBUG: API response keys: {list(result.keys())}")
-#         print(f"🔍 DEBUG: model_path in response: {result.get('model_path', 'MISSING')}")
-        
-#         # 🚨 PRODUCTION: Pas de fallback - le model_path DOIT être dans la réponse
-#         if "model_path" not in result:
-#             raise Exception(f"❌ CRITICAL: model_path missing from API response! Response: {result}")
-        
-#         if result.get("status") == "fine_tuning_complete" or result.get("model_updated"):
-#             new_auc = result.get("auc")
-#             model_path = result["model_path"]  # 🚨 Pas de fallback!
-            
-#             if new_auc is None:
-#                 raise Exception(f"❌ CRITICAL: AUC missing from API response! Response: {result}")
-            
-#             current_auc = context['ti'].xcom_pull(task_ids="validate_model", key="val_auc")
-#             auc_improvement = new_auc - current_auc if current_auc > 0 else 0.02
-            
-#             print(f"🔍 DEBUG: Extracted model_path: {model_path}")
-#             print(f"� DEBUG: AUC: {current_auc:.4f} → {new_auc:.4f} (+{auc_improvement:.4f})")
-            
-#             print(f"🧠 Fine-tuning successful with fresh BigQuery data!")
-#             print(f"📈 AUC improvement: {current_auc:.4f} → {new_auc:.4f} (+{auc_improvement:.4f})")
-            
-#             # Stocker les résultats
-#             context['ti'].xcom_push(key="fine_tune_success", value=True)
-#             context['ti'].xcom_push(key="auc_improvement", value=auc_improvement)
-#             context['ti'].xcom_push(key="new_auc", value=new_auc)
-#             context['ti'].xcom_push(key="model_path", value=model_path)  # 🔧 Stocker le chemin
-#         else:
-#             raise Exception(f"❌ CRITICAL: Fine-tuning failed or invalid status! Response: {result}")
-            
-#     except Exception as e:
-#         print(f"❌ Fine-tuning pipeline failed: {e}")
-#         # 🚨 PRODUCTION: Pas de fallback - on fait échouer la tâche
-#         raise e
 
 def end_monitoring(**context):
 
@@ -561,10 +406,9 @@ def end_monitoring(**context):
     if drift or (auc != -1.0 and auc < 0.90):
         send_discord_alert(drift=drift, auc=auc, retrained=(retrained == "retrain_model"))
     
-    # 🎉 SUCCÈS DE FINE-TUNING - Se déclenche EN PLUS si le fine-tuning réussit
-    if fine_tune_success and auc_improvement and auc_improvement > 0:
+    # 🎉 Envoie une notification dans tous les cas de fine-tuning réussi (même sans gain)
+    if fine_tune_success:
         send_fine_tuning_success_alert(context)
-
 
     # === Log vers BigQuery
     validation_type = ti.xcom_pull(task_ids="validate_model", key="validation_type") or "unknown"
@@ -637,8 +481,8 @@ def send_fine_tuning_success_alert(context):
         if not webhook_url:
             print("⚠️ No Discord webhook URL configured in environment variables")
             return
-        
-        if auc_improvement > 0.01:  # Amélioration significative
+
+        if auc_improvement > 0.01:
             message = f"""🎉 **EXCELLENT! Fine-tuning réussi avec BigQuery!** 🎉
 
 📊 **Performance améliorée:** AUC +{auc_improvement:.4f} (maintenant {new_auc:.4f})
@@ -646,16 +490,47 @@ def send_fine_tuning_success_alert(context):
 ⚡ **Données fraîches:** Dernières 500 transactions BigQuery
 🚀 **Statut:** Production ready!
 
-*Le modèle de détection de fraude est plus intelligent! 🤖*"""
-        else:
-            message = f"""✅ **Fine-tuning BigQuery completed!** ✅
-    
-📊 **Performance maintenue:** AUC {new_auc:.4f}
-🧠 **Modèle actualisé:** {model_path}
-🔄 **Données synchronisées:** 500 dernières transactions
-📊 **Statut:** Modèle à jour et opérationnel
+*Le modèle de détection de fraude est plus intelligent! 🤖*
+"""
+        elif auc_improvement < 0:
+            message = f"""⚠️ **Attention : fine-tuning avec dégradation de performance** ⚠️
 
-*Continuons à surveiller les performances! 👀*"""
+📉 **AUC détérioré:** -{abs(auc_improvement):.4f} (de {new_auc + abs(auc_improvement):.4f} → {new_auc:.4f})
+🧠 **Modèle mis à jour malgré tout:** {model_path}
+🧪 **Mode:** Fine-tuning forcé (test)
+📦 **Données utilisées:** BigQuery + historiques éventuels
+
+*Vérifiez que cette mise à jour est souhaitée.* 🙏
+"""
+        else:
+            message = f"""✅ **Fine-tuning BigQuery terminé.** ✅
+
+📊 **Performance stable:** AUC {new_auc:.4f}
+🧠 **Modèle actualisé:** {model_path}
+📦 **Mode:** Fine-tuning automatique
+📊 **Données synchronisées:** 500 dernières transactions
+
+*Modèle à jour et en surveillance continue 👁️*
+"""
+
+#         if auc_improvement > 0.01:  # Amélioration significative
+#             message = f"""🎉 **EXCELLENT! Fine-tuning réussi avec BigQuery!** 🎉
+
+# 📊 **Performance améliorée:** AUC +{auc_improvement:.4f} (maintenant {new_auc:.4f})
+# 🧠 **Modèle mis à jour:** {model_path}
+# ⚡ **Données fraîches:** Dernières 500 transactions BigQuery
+# 🚀 **Statut:** Production ready!
+
+# *Le modèle de détection de fraude est plus intelligent! 🤖*"""
+#         else:
+#             message = f"""✅ **Fine-tuning BigQuery completed!** ✅
+    
+# 📊 **Performance maintenue:** AUC {new_auc:.4f}
+# 🧠 **Modèle actualisé:** {model_path}
+# 🔄 **Données synchronisées:** 500 dernières transactions
+# 📊 **Statut:** Modèle à jour et opérationnel
+
+# *Continuons à surveiller les performances! 👀*"""
             
         response = requests.post(webhook_url, json={"content": message})
         
