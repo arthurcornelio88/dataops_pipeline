@@ -25,11 +25,9 @@ cd dataops_pipeline
 
 ### 2. Provision the VM (One Time)
 
-Use [`docs/bigquery_setup.md`](docs/bigquery_setup.md) and [`docs/airflow_setup.md`](docs/airflow_setup.md) to:
+Use [`docs/bigquery_setup.md`](docs/bigquery_setup.md) to:
 
 * Create service account + IAM roles
-* Deploy Airflow on a fresh Debian VM
-* Configure the environment and networking (port 8080, firewall, etc.)
 
 Then, run:
 

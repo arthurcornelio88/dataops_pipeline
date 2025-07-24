@@ -59,6 +59,7 @@ export ENV=PROD
 export GOOGLE_CLOUD_PROJECT=jedha2024
 export REFERENCE_PATH=fraudTest.csv
 
+source .venv/bin/activate
 source .env.airflow
 airflow scheduler &
 airflow webserver --port 8080

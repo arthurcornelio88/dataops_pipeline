@@ -26,7 +26,7 @@ echo "✅ .env.airflow created"
 # Step 3: Load environment
 source .env.airflow
 
-echo "DEBUG : Environment variables loaded: ${ENV}, ${PROJECT}, ${REFERENCE_DATA_PATH}, ${AIRFLOW_HOME}"
+echo "DEBUG : Environment variables loaded: ${ENV}, ${GOOGLE_CLOUD_PROJECT}, ${REFERENCE_DATA_PATH}, ${AIRFLOW_HOME}"
 
 # Step 4: Clean previous metadata and cache
 rm -rf "\$AIRFLOW_HOME"/* dags/__pycache__ logs/*
