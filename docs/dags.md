@@ -91,19 +91,15 @@ Detect drift or performance drop and retrain model if needed.
 
 **DAG done in Airflow**
 
-TODO<img src="img/prod_fetch_airflow.png" alt="Dag fetch in Airflow">
+TODO<img src="img/prod_monitor_airflow.png" alt="Dag monitor in Airflow">
 
 **Result in BigQuery**
 
-TODO<img src="img/prod_fetch_bq.png" alt="Dag fetch in Airflow">
+TODO<img src="img/prod_monitor_bq.png" alt="Dag monitor in BQ">
 
-**Alerting in Discord: drift/retrain alert**
+**Alerting in Discord: drift/retrain alert, retraining success, performance degradation**
 
-TODO<img src="img/prod_fetch_bq.png" alt="Dag fetch in Airflow">
-
-**Alerting in Discord: retraining success**
-
-TODO<img src="img/prod_fetch_bq.png" alt="Dag fetch in Airflow">
+TODO<img src="img/prod_monitor_discord.png" alt="Dag monitor in Discord">
 
 ---
 
