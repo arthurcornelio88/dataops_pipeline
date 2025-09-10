@@ -299,25 +299,36 @@ def run_validation_step(**context):
 
 
 def decide_if_retrain(**context):
-    # 🔧 FORCE RETRAINING - HARDCODED FOR TESTING
-    print("🚧 FORCE MODE: Hardcoded retraining decision!")
-    return "retrain_model"
+    """
+    Décide s'il faut relancer un fine-tuning basé sur une variable d'environnement et les métriques
+    """
     
-    # === Code original commenté ===
-    # drift_detected = context['ti'].xcom_pull(task_ids="monitor_drift_report", key="drift_detected")
-    # if not drift_detected:
-    #     print("✅ No drift → stop.")
-    #     return "end_monitoring"
+    # 🎛️ Récupération de la variable d'environnement pour le mode forcé
+    force_retrain_str = os.getenv("FORCE_RETRAIN", "false").lower()
+    force_retrain = force_retrain_str in ["true", "1", "yes", "on"]
+    print(f"🎛️ Environment variable FORCE_RETRAIN: {force_retrain_str} → {force_retrain}")
+    
+    if force_retrain:
+        print("🚧 FORCE MODE: Environment FORCE_RETRAIN=true → Forcing retraining!")
+        return "retrain_model"
+    
+    # === Logique normale de décision ===
+    print("📊 Normal decision mode: checking drift and AUC...")
+    
+    drift_detected = context['ti'].xcom_pull(task_ids="monitor_drift_report", key="drift_detected")
+    if not drift_detected:
+        print("✅ No drift detected → stopping monitoring.")
+        return "end_monitoring"
 
-    # auc = context['ti'].xcom_pull(task_ids="validate_model", key="val_auc")
-    # auc_threshold = float(os.getenv("AUC_THRESHOLD", 0.90))
+    auc = context['ti'].xcom_pull(task_ids="validate_model", key="val_auc")
+    auc_threshold = float(os.getenv("AUC_THRESHOLD", 0.90))
 
-    # if auc < auc_threshold:
-    #     print(f"🚨 AUC {auc} < {auc_threshold} → Retrain needed.")
-    #     return "retrain_model"
-    # else:
-    #     print(f"✅ AUC {auc} >= {auc_threshold} → Model still good.")
-    #     return "end_monitoring"
+    if auc < auc_threshold:
+        print(f"🚨 AUC {auc:.4f} < {auc_threshold} → Retrain needed.")
+        return "retrain_model"
+    else:
+        print(f"✅ AUC {auc:.4f} >= {auc_threshold} → Model still good.")
+        return "end_monitoring"
 
 
 def find_available_fraud_data(bq_client, bq_project, dataset, min_frauds=10, max_days_back=90):
