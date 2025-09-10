@@ -9,6 +9,71 @@ import pandas as pd
 from urllib.parse import urljoin 
 import numpy as np
 
+def diagnose_bigquery_tables(bq_project, dataset):
+    """
+    Diagnostic function to list all available tables in BigQuery dataset
+    """
+    try:
+        bq = bigquery.Client()
+        dataset_ref = bq.dataset(dataset, project=bq_project)
+        tables = list(bq.list_tables(dataset_ref))
+        
+        print(f"🔍 DIAGNOSTIC: Tables in {bq_project}.{dataset}:")
+        
+        if not tables:
+            print("❌ No tables found in dataset")
+            return []
+        
+        table_info = []
+        for table in tables:
+            table_name = table.table_id
+            try:
+                # Get basic table info
+                table_ref = dataset_ref.table(table_name)
+                table_obj = bq.get_table(table_ref)
+                row_count = table_obj.num_rows
+                
+                # Check if it's a daily table and extract date
+                is_daily = table_name.startswith("daily_") and len(table_name) == 14
+                table_date = None
+                days_old = None
+                
+                if is_daily:
+                    try:
+                        date_str = table_name[6:]  # Extract YYYYMMDD
+                        table_date = datetime.strptime(date_str, "%Y%m%d")
+                        days_old = (datetime.now() - table_date).days
+                    except ValueError:
+                        is_daily = False
+                
+                table_info.append({
+                    "name": table_name,
+                    "rows": row_count,
+                    "is_daily": is_daily,
+                    "date": table_date,
+                    "days_old": days_old
+                })
+                
+                print(f"   - {table_name}: {row_count:,} rows" + 
+                      (f" ({days_old} days old)" if days_old is not None else ""))
+                
+            except Exception as e:
+                print(f"   - {table_name}: Error getting info - {str(e)}")
+        
+        # Sort daily tables by date
+        daily_tables = [t for t in table_info if t["is_daily"]]
+        if daily_tables:
+            daily_tables.sort(key=lambda x: x["date"] if x["date"] else datetime.min, reverse=True)
+            print(f"\n📅 Daily tables chronologically (newest first):")
+            for table in daily_tables[:10]:  # Show top 10
+                print(f"   - {table['name']}: {table['rows']:,} rows, {table['days_old']} days old")
+        
+        return table_info
+        
+    except Exception as e:
+        print(f"❌ Error diagnosing BigQuery dataset: {str(e)}")
+        return []
+
 # ========= ENV & CONFIG ========= #
 ENV = os.getenv("ENV") # Define it in .env.airflow
 PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT") # Define it in .env.airflow 
@@ -103,7 +168,7 @@ def run_drift_monitoring():
     context['ti'].xcom_push(key="drift_detected", value=result["drift_summary"]["drift_detected"])
     context['ti'].xcom_push(key="timestamp", value=today)
 
-from outils import fetch_historical_frauds  # 🆕 Import at the top
+ 
 
 def run_validation_step(**context):
     """Validation du modèle : comparer prédictions vs vraies étiquettes depuis BigQuery"""
@@ -146,7 +211,7 @@ def run_validation_step(**context):
             bq_client=bq,
             bq_project=BQ_PROJECT,
             dataset=BQ_RAW_DATASET,
-            days_back=7,
+            days_back=90,  # 🔧 Extended from 30 to 90 days for validation
             min_frauds=10,
             verbose=True
         )
@@ -230,6 +295,7 @@ def run_validation_step(**context):
     context['ti'].xcom_push(key="validation_type", value=validation_type)
     context['ti'].xcom_push(key="validation_samples", value=n_samples)
 
+ 
 
 
 def decide_if_retrain(**context):
@@ -254,7 +320,110 @@ def decide_if_retrain(**context):
     #     return "end_monitoring"
 
 
-from outils import fetch_historical_frauds  # 🆕 Import the shared helper
+def find_available_fraud_data(bq_client, bq_project, dataset, min_frauds=10, max_days_back=90):
+    """
+    Intelligently find available BigQuery tables with fraud data
+    """
+    print(f"🔍 Searching for fraud data in {bq_project}.{dataset}.*")
+    
+    # List all tables in the dataset
+    try:
+        dataset_ref = bq_client.dataset(dataset, project=bq_project)
+        tables = list(bq_client.list_tables(dataset_ref))
+        
+        if not tables:
+            print(f"❌ No tables found in dataset {bq_project}.{dataset}")
+            return pd.DataFrame()
+        
+        # Filter for daily tables and sort by date (newest first)
+        daily_tables = []
+        for table in tables:
+            table_name = table.table_id
+            if table_name.startswith("daily_") and len(table_name) == 14:  # daily_YYYYMMDD
+                try:
+                    date_str = table_name[6:]  # Extract YYYYMMDD
+                    table_date = datetime.strptime(date_str, "%Y%m%d")
+                    days_old = (datetime.now() - table_date).days
+                    if days_old <= max_days_back:
+                        daily_tables.append((table_name, table_date, days_old))
+                except ValueError:
+                    continue  # Skip tables with invalid date format
+        
+        if not daily_tables:
+            print(f"❌ No daily tables found within {max_days_back} days")
+            return pd.DataFrame()
+        
+        # Sort by date (newest first)
+        daily_tables.sort(key=lambda x: x[1], reverse=True)
+        
+        print(f"📋 Found {len(daily_tables)} daily tables within {max_days_back} days:")
+        for table_name, table_date, days_old in daily_tables[:10]:  # Show first 10
+            print(f"   - {table_name} ({days_old} days old)")
+        
+        # Try to find tables with enough fraud data
+        fraud_data = []
+        total_frauds = 0
+        
+        for table_name, table_date, days_old in daily_tables:
+            if total_frauds >= min_frauds:
+                break
+                
+            full_table_name = f"{bq_project}.{dataset}.{table_name}"
+            
+            try:
+                # First check if table has is_fraud column and count frauds
+                count_query = f"""
+                SELECT COUNT(*) as total_rows, 
+                       COUNTIF(is_fraud = 1) as fraud_count
+                FROM `{full_table_name}` 
+                WHERE is_fraud IS NOT NULL
+                LIMIT 1
+                """
+                
+                count_result = bq_client.query(count_query).to_dataframe()
+                
+                if not count_result.empty:
+                    total_rows = count_result.iloc[0]['total_rows']
+                    fraud_count = count_result.iloc[0]['fraud_count']
+                    
+                    if fraud_count > 0:
+                        print(f"✅ {table_name}: {fraud_count} frauds out of {total_rows} rows ({days_old} days old)")
+                        
+                        # Fetch the fraud data
+                        fraud_query = f"""
+                        SELECT * FROM `{full_table_name}` 
+                        WHERE is_fraud = 1
+                        ORDER BY RAND()
+                        LIMIT {min_frauds - total_frauds}
+                        """
+                        
+                        table_frauds = bq_client.query(fraud_query).to_dataframe()
+                        if not table_frauds.empty:
+                            fraud_data.append(table_frauds)
+                            total_frauds += len(table_frauds)
+                            print(f"   → Added {len(table_frauds)} frauds (total: {total_frauds})")
+                    else:
+                        print(f"⚪ {table_name}: No frauds found ({days_old} days old)")
+                
+            except Exception as e:
+                print(f"⚠️ Error checking {table_name}: {str(e)}")
+                continue
+        
+        # Combine all fraud data
+        if fraud_data:
+            combined_frauds = pd.concat(fraud_data, ignore_index=True)
+            print(f"🎯 Successfully collected {len(combined_frauds)} fraud samples from {len(fraud_data)} tables")
+            return combined_frauds
+        else:
+            print(f"❌ Could not find sufficient fraud data (need {min_frauds}, found {total_frauds})")
+            return pd.DataFrame()
+            
+    except Exception as e:
+        print(f"❌ Error listing tables in dataset {bq_project}.{dataset}: {str(e)}")
+        return pd.DataFrame()
+
+
+ 
 
 def retrain_model_step(**context):
     """🧠 FINE-TUNING avec nouvelles données BigQuery → Preprocessing → Fine-tuning"""
@@ -269,6 +438,12 @@ def retrain_model_step(**context):
         raw_table = f"{BQ_PROJECT}.{BQ_RAW_DATASET}.daily_{today}"
         print(f"📥 Fetching fresh data from BigQuery table: {raw_table}")
         bq = bigquery.Client()
+        # Optional: quick diagnostic of available tables to aid debugging on VM
+        try:
+            print("\n🔍 Running BigQuery table diagnostic (top tables)...")
+            diagnose_bigquery_tables(BQ_PROJECT, BQ_RAW_DATASET)
+        except Exception as diag_err:
+            print(f"⚠️ Diagnostic skipped: {diag_err}")
         df_fresh = bq.query(f"SELECT * FROM `{raw_table}` ORDER BY cc_num DESC LIMIT 1000").to_dataframe()
 
         if df_fresh.empty:
@@ -279,16 +454,28 @@ def retrain_model_step(**context):
             print(f"📊 Fraud ratio in fresh data: {fraud_count} / {len(df_fresh)}")
 
             if fraud_count < 4:
-                print("⚠️ No frauds in fresh data — trying to fetch historical frauds")
+                print("⚠️ No frauds in fresh data — trying to find historical frauds with smart search")
 
-                df_extra = fetch_historical_frauds(
+                # 🎯 Try our new smart fraud finder first
+                df_extra = find_available_fraud_data(
                     bq_client=bq,
                     bq_project=BQ_PROJECT,
                     dataset=BQ_RAW_DATASET,
-                    days_back=7,
-                    min_frauds=10,
-                    verbose=True
+                    min_frauds=15,  # Try to get more frauds
+                    max_days_back=90  # Look back up to 3 months
                 )
+
+                # Fallback to the original function if smart finder fails
+                if df_extra.empty:
+                    print("🔄 Smart finder failed, trying original fetch_historical_frauds...")
+                    df_extra = fetch_historical_frauds(
+                        bq_client=bq,
+                        bq_project=BQ_PROJECT,
+                        dataset=BQ_RAW_DATASET,
+                        days_back=90,  # 🔧 Extended from 7 to 90 days
+                        min_frauds=10,
+                        verbose=True
+                    )
 
                 if not df_extra.empty:
                     common_cols = df_fresh.columns.intersection(df_extra.columns)
@@ -310,7 +497,17 @@ def retrain_model_step(**context):
         # Log class distribution
         if "is_fraud" in df_fresh.columns:
             fraud_ratio = df_fresh["is_fraud"].mean()
-            print(f"📊 Final fraud ratio: {fraud_ratio:.4f}")
+            fraud_count = df_fresh["is_fraud"].sum()
+            print(f"📊 Final fraud ratio: {fraud_ratio:.4f} ({fraud_count} frauds out of {len(df_fresh)} samples)")
+            
+            # Warning if fraud ratio is very low
+            if fraud_count < 5:
+                print(f"⚠️ WARNING: Very few frauds ({fraud_count}) in training data - this may cause training issues")
+            
+            # Log sample distribution
+            print(f"📈 Class distribution: {df_fresh['is_fraud'].value_counts().to_dict()}")
+        else:
+            print("⚠️ WARNING: 'is_fraud' column not found in data")
 
         # 🔄 Preprocessing
         print("🔄 Preprocessing fresh data with /preprocess_direct...")
@@ -332,7 +529,8 @@ def retrain_model_step(**context):
         # 🧠 Fine-tuning
         print("🧠 Starting fine-tuning with preprocessed data...")
         train_endpoint = urljoin(API_URL, "/train")
-        finetune_res = requests.post(train_endpoint, json={
+        
+        train_payload = {
             "timestamp": fresh_timestamp,
             "timestamp_model_finetune": "latest",
             "fast": False,
@@ -341,7 +539,12 @@ def retrain_model_step(**context):
             "mode": "fine_tune",
             "learning_rate": 0.01,
             "epochs": 10
-        }, timeout=600)
+        }
+        
+        print(f"🔍 DEBUG: Fine-tuning request payload: {train_payload}")
+        print(f"🔗 Training endpoint: {train_endpoint}")
+        
+        finetune_res = requests.post(train_endpoint, json=train_payload, timeout=600)
 
         if finetune_res.status_code != 200:
             raise Exception(f"❌ Fine-tuning failed: {finetune_res.status_code} - {finetune_res.text}")
@@ -352,8 +555,28 @@ def retrain_model_step(**context):
         import json
         print(json.dumps(result, indent=2))
 
+        # Check if the API returned an error status
+        if result.get("status") == "error":
+            error_msg = result.get("message", "Unknown error")
+            print(f"❌ API returned error status: {error_msg}")
+            
+            # Set failure flags in XCom for proper handling
+            context['ti'].xcom_push(key="fine_tune_success", value=False)
+            context['ti'].xcom_push(key="error_message", value=error_msg)
+            context['ti'].xcom_push(key="auc_improvement", value=0.0)
+            context['ti'].xcom_push(key="new_auc", value=0.0)
+            
+            # Don't raise exception, let the workflow continue but mark as failed
+            print("⚠️ Fine-tuning failed but continuing workflow to log results")
+            return
+
         if "model_path" not in result:
-            raise Exception("❌ CRITICAL: model_path missing from API response")
+            print("⚠️ model_path missing from API response, but status was success")
+            context['ti'].xcom_push(key="fine_tune_success", value=False)
+            context['ti'].xcom_push(key="error_message", value="model_path missing from response")
+            context['ti'].xcom_push(key="auc_improvement", value=0.0)
+            context['ti'].xcom_push(key="new_auc", value=0.0)
+            return
 
         current_auc = context['ti'].xcom_pull(task_ids="validate_model", key="val_auc")
         new_auc = result.get("auc")
@@ -383,6 +606,7 @@ def end_monitoring(**context):
     fine_tune_success = ti.xcom_pull(task_ids="retrain_model", key="fine_tune_success")
     auc_improvement = ti.xcom_pull(task_ids="retrain_model", key="auc_improvement")
     new_auc = ti.xcom_pull(task_ids="retrain_model", key="new_auc")
+    error_message = ti.xcom_pull(task_ids="retrain_model", key="error_message")
 
     if auc is None:
         auc = -1.0  # not evaluated (no drift)
@@ -397,6 +621,9 @@ def end_monitoring(**context):
     if fine_tune_success and auc_improvement:
         print(f"🧠 Fine-tuning résultat : AUC {auc:.4f} → {new_auc:.4f} (+{auc_improvement:.4f})")
         print("🎯 Modèle mis à jour avec apprentissage incrémental")
+    elif retrained == 'retrain_model' and not fine_tune_success:
+        print(f"❌ Fine-tuning failed: {error_message or 'Unknown error'}")
+        print("⚠️ Model was not updated due to training failure")
     
     print("🧾 Environnement     :", ENV)
     print("--------------------------------------------\n")
@@ -409,6 +636,9 @@ def end_monitoring(**context):
     # 🎉 Envoie une notification dans tous les cas de fine-tuning réussi (même sans gain)
     if fine_tune_success:
         send_fine_tuning_success_alert(context)
+    elif retrained == 'retrain_model' and not fine_tune_success:
+        # Send failure notification
+        send_fine_tuning_failure_alert(context, error_message)
 
     # === Log vers BigQuery
     validation_type = ti.xcom_pull(task_ids="validate_model", key="validation_type") or "unknown"
@@ -433,7 +663,8 @@ def end_monitoring(**context):
         "validation_samples": validation_samples,
         "fine_tune_success": fine_tune_success or False,
         "auc_improvement": auc_improvement or 0.0,
-        "new_auc": new_auc or auc
+        "new_auc": new_auc or auc,
+        "error_message": error_message or ""
     }])
 
     create_monitoring_table_if_needed()
@@ -446,6 +677,36 @@ def end_monitoring(**context):
 
 
 ### Auxiliar functions
+
+def send_fine_tuning_failure_alert(context, error_message):
+    """Envoie une alerte Discord pour l'échec du fine-tuning"""
+    webhook_url = DISCORD_WEBHOOK_URL
+    if not webhook_url:
+        print("⚠️ No Discord webhook URL configured in environment variables")
+        return
+
+    try:
+        message = f"""❌ **ATTENTION: Fine-tuning failed!** ❌
+
+🚨 **Error:** {error_message or 'Unknown training error'}
+📅 **Date:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}
+🧠 **Issue:** Model training pipeline failed
+📊 **Data used:** BigQuery latest 500 transactions
+⚠️ **Impact:** Model was NOT updated, using previous version
+
+*Please check the training API logs and data quality.* 🔍
+"""
+        
+        response = requests.post(webhook_url, json={"content": message})
+        
+        if response.status_code in [200, 204]:
+            print(f"🚨 Discord failure notification sent! Status: {response.status_code}")
+        else:
+            print(f"⚠️ Discord failure notification failed with status {response.status_code}: {response.text}")
+        
+    except Exception as e:
+        print(f"⚠️ Failed to send Discord failure alert: {e}")
+
 
 def send_fine_tuning_success_alert(context):
     """Envoie une alerte Discord pour célébrer le succès du fine-tuning"""
@@ -608,6 +869,7 @@ def create_monitoring_table_if_needed():
             bigquery.SchemaField("fine_tune_success", "BOOL"),
             bigquery.SchemaField("auc_improvement", "FLOAT"),
             bigquery.SchemaField("new_auc", "FLOAT"),
+            bigquery.SchemaField("error_message", "STRING"),
         ]
         table = bigquery.Table(table_id, schema=schema)
         client.create_table(table)
